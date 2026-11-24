@@ -11,6 +11,7 @@ controls it supports.
 ## Features
 
 - Switch rooms from a dropdown, and pin the rooms you use most
+- Turn every light, switch and fan in a room on or off at once
 - Room order and hidden rooms are taken from your Home Assistant dashboard the first time you connect
 - Shows the same devices your Home Assistant dashboard shows
 - Pin individual devices to a tab of their own
@@ -68,15 +69,23 @@ The settings window has five panes:
 | Thermostats | Mode, target temperature or range, fan and preset |
 | Sensors and everything else | Current state |
 
+The switch beside the room name turns the room's lights, switches, fans,
+humidifiers and toggle helpers on or off together. It shows on when any of them
+is on, so switching it off turns them all off, and switching it on turns them
+all on, as Home Assistant's own room toggle does. It acts only on the devices
+the panel shows for that room, skips anything unavailable, and never touches
+locks, covers, alarm panels, thermostats or media players. Rooms with nothing it
+could switch have no switch.
+
 Controls come from what each device reports. A light that cannot change colour
 has no colour swatch; a cover that cannot report its position has no slider.
 
 ## Keyboard
 
 With the panel open: `j`/`k` or `↑`/`↓` move between devices, `h`/`l` or
-`←`/`→` change room, `enter` or `space` switches a device on or off, `e` opens
-its controls, `r` refreshes, `s` opens settings, `tab` moves to the next bar
-panel, and `esc` closes.
+`←`/`→` change room, `enter` or `space` switches a device on or off, `a`
+switches the whole room on or off, `e` opens its controls, `r` refreshes, `s`
+opens settings, `tab` moves to the next bar panel, and `esc` closes.
 
 ## Commands
 
@@ -87,6 +96,7 @@ omarchy-shell atrium close
 omarchy-shell atrium refresh                     # re-read from Home Assistant
 omarchy-shell atrium toggleEntity light.desk
 omarchy-shell atrium activate scene.movie_night
+omarchy-shell atrium toggleArea Kitchen          # the room switch, by name
 omarchy-shell atrium areas                       # room names, one per line
 omarchy-shell atrium rooms                       # settings, on the Areas pane
 omarchy-shell atrium settings                    # settings, on the Connection pane

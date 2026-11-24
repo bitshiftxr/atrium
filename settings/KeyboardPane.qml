@@ -14,6 +14,7 @@ Item {
     { keys: "←  →", what: "Previous or next room" },
     { keys: "enter", what: "Toggle the selected row" },
     { keys: "space", what: "Toggle the selected row" },
+    { keys: "a", what: "Switch everything in the room on or off" },
     { keys: "e", what: "Expand the selected row's controls" },
     { keys: "r", what: "Refresh from Home Assistant" },
     { keys: "s", what: "Open these settings" },
@@ -100,6 +101,7 @@ Item {
           "omarchy-shell atrium toggle",
           "omarchy-shell atrium toggleEntity light.desk",
           "omarchy-shell atrium activate scene.movie_night",
+          "omarchy-shell atrium toggleArea Kitchen",
           "omarchy-shell atrium rooms",
           "omarchy-shell atrium status"
         ]
