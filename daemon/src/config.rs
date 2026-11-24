@@ -134,7 +134,10 @@ mod tests {
             ..Default::default()
         };
         config.save(&path).unwrap();
-        assert_eq!(Config::load(&path).unwrap().pinned_tabs, ["area:office", "unassigned"]);
+        assert_eq!(
+            Config::load(&path).unwrap().pinned_tabs,
+            ["area:office", "unassigned"]
+        );
         std::fs::remove_file(&path).ok();
     }
 
@@ -142,7 +145,10 @@ mod tests {
     fn the_config_file_is_camel_case_throughout() {
         let path = temp_dir().join("camel.json");
         let config = Config {
-            areas: AreaPrefs { hide_empty_areas: true, ..Default::default() },
+            areas: AreaPrefs {
+                hide_empty_areas: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
         config.save(&path).unwrap();
@@ -180,7 +186,10 @@ mod tests {
         std::fs::write(&path, b"{ this is not json").unwrap();
 
         let outcome = Config::load(&path);
-        assert!(outcome.is_err(), "a corrupt config must not read as defaults");
+        assert!(
+            outcome.is_err(),
+            "a corrupt config must not read as defaults"
+        );
         assert!(kept.exists(), "the unreadable file must be kept");
         assert_eq!(std::fs::read(&kept).unwrap(), b"{ this is not json");
         std::fs::remove_file(&kept).ok();
@@ -211,7 +220,10 @@ mod tests {
         .unwrap();
         let loaded = Config::load(&path).unwrap();
         assert_eq!(loaded.base_url, "https://ha.example.com");
-        assert!(loaded.areas.hide_empty_areas, "missing fields take their default");
+        assert!(
+            loaded.areas.hide_empty_areas,
+            "missing fields take their default"
+        );
         std::fs::remove_file(&path).ok();
     }
 }

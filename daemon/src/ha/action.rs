@@ -84,12 +84,21 @@ pub fn resolve(entity_id: &str, action: &str, data: &Value) -> Result<ServiceCal
     let none = || Value::Object(Map::new());
 
     let resolved = match (domain, action) {
-        ("light" | "switch" | "fan" | "input_boolean" | "humidifier" | "siren" | "remote"
-            | "media_player" | "climate", "toggle") => call(domain, "toggle", entity_id, none()),
-        ("light" | "switch" | "fan" | "input_boolean" | "humidifier" | "siren" | "remote"
-            | "media_player" | "climate", "turnOn") => call(domain, "turn_on", entity_id, none()),
-        ("light" | "switch" | "fan" | "input_boolean" | "humidifier" | "siren" | "remote"
-            | "media_player" | "climate", "turnOff") => call(domain, "turn_off", entity_id, none()),
+        (
+            "light" | "switch" | "fan" | "input_boolean" | "humidifier" | "siren" | "remote"
+            | "media_player" | "climate",
+            "toggle",
+        ) => call(domain, "toggle", entity_id, none()),
+        (
+            "light" | "switch" | "fan" | "input_boolean" | "humidifier" | "siren" | "remote"
+            | "media_player" | "climate",
+            "turnOn",
+        ) => call(domain, "turn_on", entity_id, none()),
+        (
+            "light" | "switch" | "fan" | "input_boolean" | "humidifier" | "siren" | "remote"
+            | "media_player" | "climate",
+            "turnOff",
+        ) => call(domain, "turn_off", entity_id, none()),
 
         ("scene", "activate") => call("scene", "turn_on", entity_id, none()),
         ("script", "activate") => call("script", "turn_on", entity_id, none()),
@@ -104,17 +113,32 @@ pub fn resolve(entity_id: &str, action: &str, data: &Value) -> Result<ServiceCal
             if value < 1.0 {
                 call("light", "turn_off", entity_id, none())
             } else {
-                call("light", "turn_on", entity_id, json!({ "brightness": value.round() as u64 }))
+                call(
+                    "light",
+                    "turn_on",
+                    entity_id,
+                    json!({ "brightness": value.round() as u64 }),
+                )
             }
         }
         ("light", "setColorTemp") => {
             let kelvin = bounded(data, "kelvin", 1000.0..=10000.0)?;
-            call("light", "turn_on", entity_id, json!({ "color_temp_kelvin": kelvin.round() as u64 }))
+            call(
+                "light",
+                "turn_on",
+                entity_id,
+                json!({ "color_temp_kelvin": kelvin.round() as u64 }),
+            )
         }
         ("light", "setColor") => {
             let hue = bounded(data, "hue", 0.0..=360.0)?;
             let saturation = bounded(data, "saturation", 0.0..=100.0)?;
-            call("light", "turn_on", entity_id, json!({ "hs_color": [hue, saturation] }))
+            call(
+                "light",
+                "turn_on",
+                entity_id,
+                json!({ "hs_color": [hue, saturation] }),
+            )
         }
 
         ("cover", "open") => call("cover", "open_cover", entity_id, none()),
@@ -122,32 +146,67 @@ pub fn resolve(entity_id: &str, action: &str, data: &Value) -> Result<ServiceCal
         ("cover", "stop") => call("cover", "stop_cover", entity_id, none()),
         ("cover", "setPosition") => {
             let position = bounded(data, "position", 0.0..=100.0)?;
-            call("cover", "set_cover_position", entity_id, json!({ "position": position.round() as u64 }))
+            call(
+                "cover",
+                "set_cover_position",
+                entity_id,
+                json!({ "position": position.round() as u64 }),
+            )
         }
 
-        ("media_player", "playPause") => call("media_player", "media_play_pause", entity_id, none()),
+        ("media_player", "playPause") => {
+            call("media_player", "media_play_pause", entity_id, none())
+        }
         ("media_player", "next") => call("media_player", "media_next_track", entity_id, none()),
-        ("media_player", "previous") => call("media_player", "media_previous_track", entity_id, none()),
+        ("media_player", "previous") => {
+            call("media_player", "media_previous_track", entity_id, none())
+        }
         ("media_player", "setVolume") => {
             let level = bounded(data, "level", 0.0..=1.0)?;
-            call("media_player", "volume_set", entity_id, json!({ "volume_level": level }))
+            call(
+                "media_player",
+                "volume_set",
+                entity_id,
+                json!({ "volume_level": level }),
+            )
         }
         ("media_player", "setMuted") => {
-            let muted = data.get("muted").and_then(Value::as_bool).ok_or(Error::BadArgument("muted"))?;
-            call("media_player", "volume_mute", entity_id, json!({ "is_volume_muted": muted }))
+            let muted = data
+                .get("muted")
+                .and_then(Value::as_bool)
+                .ok_or(Error::BadArgument("muted"))?;
+            call(
+                "media_player",
+                "volume_mute",
+                entity_id,
+                json!({ "is_volume_muted": muted }),
+            )
         }
 
         ("fan", "setSpeed") => {
             let percentage = bounded(data, "percentage", 0.0..=100.0)?;
-            call("fan", "set_percentage", entity_id, json!({ "percentage": percentage.round() as u64 }))
+            call(
+                "fan",
+                "set_percentage",
+                entity_id,
+                json!({ "percentage": percentage.round() as u64 }),
+            )
         }
 
-        ("climate", "setHvacMode") => {
-            call("climate", "set_hvac_mode", entity_id, json!({ "hvac_mode": text(data, "mode")? }))
-        }
+        ("climate", "setHvacMode") => call(
+            "climate",
+            "set_hvac_mode",
+            entity_id,
+            json!({ "hvac_mode": text(data, "mode")? }),
+        ),
         ("climate", "setTemperature") => {
             let temperature = bounded(data, "temperature", TEMPERATURE_RANGE)?;
-            call("climate", "set_temperature", entity_id, json!({ "temperature": temperature }))
+            call(
+                "climate",
+                "set_temperature",
+                entity_id,
+                json!({ "temperature": temperature }),
+            )
         }
         ("climate", "setTemperatureRange") => {
             let low = bounded(data, "low", TEMPERATURE_RANGE)?;
@@ -155,14 +214,25 @@ pub fn resolve(entity_id: &str, action: &str, data: &Value) -> Result<ServiceCal
             if low > high {
                 return Err(Error::BadArgument("low/high"));
             }
-            call("climate", "set_temperature", entity_id, json!({ "target_temp_low": low, "target_temp_high": high }))
+            call(
+                "climate",
+                "set_temperature",
+                entity_id,
+                json!({ "target_temp_low": low, "target_temp_high": high }),
+            )
         }
-        ("climate", "setFanMode") => {
-            call("climate", "set_fan_mode", entity_id, json!({ "fan_mode": text(data, "mode")? }))
-        }
-        ("climate", "setPresetMode") => {
-            call("climate", "set_preset_mode", entity_id, json!({ "preset_mode": text(data, "mode")? }))
-        }
+        ("climate", "setFanMode") => call(
+            "climate",
+            "set_fan_mode",
+            entity_id,
+            json!({ "fan_mode": text(data, "mode")? }),
+        ),
+        ("climate", "setPresetMode") => call(
+            "climate",
+            "set_preset_mode",
+            entity_id,
+            json!({ "preset_mode": text(data, "mode")? }),
+        ),
 
         _ => return Err(unsupported()),
     };
@@ -174,7 +244,8 @@ mod tests {
     use super::*;
 
     fn ok(entity: &str, action: &str, data: Value) -> ServiceCall {
-        resolve(entity, action, &data).unwrap_or_else(|e| panic!("{entity}/{action} should resolve: {e}"))
+        resolve(entity, action, &data)
+            .unwrap_or_else(|e| panic!("{entity}/{action} should resolve: {e}"))
     }
 
     #[test]
@@ -182,14 +253,23 @@ mod tests {
         let c = ok("light.desk", "toggle", json!({}));
         assert_eq!((c.domain.as_str(), c.service.as_str()), ("light", "toggle"));
         let c = ok("switch.pump", "turnOff", json!({}));
-        assert_eq!((c.domain.as_str(), c.service.as_str()), ("switch", "turn_off"));
+        assert_eq!(
+            (c.domain.as_str(), c.service.as_str()),
+            ("switch", "turn_off")
+        );
     }
 
     #[test]
     fn scenes_and_scripts_activate_through_turn_on_but_buttons_press() {
         assert_eq!(ok("scene.movie", "activate", json!({})).service, "turn_on");
-        assert_eq!(ok("script.bedtime", "activate", json!({})).service, "turn_on");
-        assert_eq!(ok("button.doorbell", "activate", json!({})).service, "press");
+        assert_eq!(
+            ok("script.bedtime", "activate", json!({})).service,
+            "turn_on"
+        );
+        assert_eq!(
+            ok("button.doorbell", "activate", json!({})).service,
+            "press"
+        );
     }
 
     #[test]
@@ -198,7 +278,10 @@ mod tests {
         assert_eq!(c.service, "turn_on");
         assert_eq!(c.data["brightness"], 128);
 
-        assert_eq!(ok("light.desk", "setBrightness", json!({ "brightness": 0 })).service, "turn_off");
+        assert_eq!(
+            ok("light.desk", "setBrightness", json!({ "brightness": 0 })).service,
+            "turn_off"
+        );
 
         assert_eq!(
             resolve("light.desk", "setBrightness", &json!({ "brightness": 999 })),
@@ -214,18 +297,31 @@ mod tests {
     fn out_of_range_values_are_refused_rather_than_forwarded() {
         assert!(resolve("cover.door", "setPosition", &json!({ "position": 150 })).is_err());
         assert!(resolve("media_player.tv", "setVolume", &json!({ "level": 2.0 })).is_err());
-        assert!(resolve("light.a", "setColor", &json!({ "hue": 400, "saturation": 50 })).is_err());
+        assert!(resolve(
+            "light.a",
+            "setColor",
+            &json!({ "hue": 400, "saturation": 50 })
+        )
+        .is_err());
         assert!(resolve("light.a", "setColorTemp", &json!({ "kelvin": 50 })).is_err());
         assert!(resolve("fan.a", "setSpeed", &json!({ "percentage": 101 })).is_err());
     }
 
     #[test]
     fn a_temperature_band_must_be_the_right_way_round() {
-        let c = ok("climate.hall", "setTemperatureRange", json!({ "low": 18, "high": 24 }));
+        let c = ok(
+            "climate.hall",
+            "setTemperatureRange",
+            json!({ "low": 18, "high": 24 }),
+        );
         assert_eq!(c.data["target_temp_low"], 18.0);
         assert_eq!(c.data["target_temp_high"], 24.0);
         assert_eq!(
-            resolve("climate.hall", "setTemperatureRange", &json!({ "low": 24, "high": 18 })),
+            resolve(
+                "climate.hall",
+                "setTemperatureRange",
+                &json!({ "low": 24, "high": 18 })
+            ),
             Err(Error::BadArgument("low/high"))
         );
     }
@@ -237,23 +333,51 @@ mod tests {
             Err(Error::BadArgument("brightness"))
         );
         assert_eq!(
-            resolve("light.desk", "setBrightness", &json!({ "brightness": "bright" })),
+            resolve(
+                "light.desk",
+                "setBrightness",
+                &json!({ "brightness": "bright" })
+            ),
             Err(Error::BadArgument("brightness"))
         );
         assert_eq!(
             resolve("climate.hall", "setHvacMode", &json!({ "mode": "" })),
             Err(Error::BadArgument("mode"))
         );
-        assert!(resolve("media_player.tv", "setVolume", &json!({ "level": f64::NAN })).is_err());
+        assert!(resolve(
+            "media_player.tv",
+            "setVolume",
+            &json!({ "level": f64::NAN })
+        )
+        .is_err());
     }
 
     #[test]
     fn temperatures_outside_any_plausible_setpoint_are_refused() {
-        assert!(resolve("climate.hall", "setTemperature", &json!({ "temperature": 500 })).is_err());
-        assert!(resolve("climate.hall", "setTemperature", &json!({ "temperature": -273 })).is_err());
-        assert!(resolve("climate.hall", "setTemperature", &json!({ "temperature": 21 })).is_ok());
-        assert!(resolve("climate.hall", "setTemperatureRange",
-                        &json!({ "low": -400, "high": 20 })).is_err());
+        assert!(resolve(
+            "climate.hall",
+            "setTemperature",
+            &json!({ "temperature": 500 })
+        )
+        .is_err());
+        assert!(resolve(
+            "climate.hall",
+            "setTemperature",
+            &json!({ "temperature": -273 })
+        )
+        .is_err());
+        assert!(resolve(
+            "climate.hall",
+            "setTemperature",
+            &json!({ "temperature": 21 })
+        )
+        .is_ok());
+        assert!(resolve(
+            "climate.hall",
+            "setTemperatureRange",
+            &json!({ "low": -400, "high": 20 })
+        )
+        .is_err());
     }
 
     #[test]
@@ -274,21 +398,46 @@ mod tests {
 
     #[test]
     fn there_is_no_action_that_names_its_own_service() {
-        for attempt in ["call_service", "homeassistant.restart", "shell_command.rm", "turn_on"] {
+        for attempt in [
+            "call_service",
+            "homeassistant.restart",
+            "shell_command.rm",
+            "turn_on",
+        ] {
             assert!(
-                resolve("light.desk", attempt, &json!({ "service": "shell_command.rm" })).is_err()
-                    || !matches!(attempt, "call_service" | "homeassistant.restart" | "shell_command.rm"),
+                resolve(
+                    "light.desk",
+                    attempt,
+                    &json!({ "service": "shell_command.rm" })
+                )
+                .is_err()
+                    || !matches!(
+                        attempt,
+                        "call_service" | "homeassistant.restart" | "shell_command.rm"
+                    ),
                 "{attempt} must not resolve"
             );
         }
-        let c = ok("light.desk", "toggle", json!({ "domain": "shell_command", "service": "rm" }));
+        let c = ok(
+            "light.desk",
+            "toggle",
+            json!({ "domain": "shell_command", "service": "rm" }),
+        );
         assert_eq!(c.domain, "light");
         assert_eq!(c.service, "toggle");
     }
 
     #[test]
     fn malformed_entity_ids_are_refused() {
-        for bad in ["", "light", "light.", ".desk", "Light.Desk", "light.desk; rm -rf /", "light..desk"] {
+        for bad in [
+            "",
+            "light",
+            "light.",
+            ".desk",
+            "Light.Desk",
+            "light.desk; rm -rf /",
+            "light..desk",
+        ] {
             assert_eq!(
                 resolve(bad, "toggle", &json!({})),
                 Err(Error::BadEntityId),

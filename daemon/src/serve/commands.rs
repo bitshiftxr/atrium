@@ -1,6 +1,6 @@
 use super::{Daemon, Outcome};
-use crate::ha::client::{CommandWriter, Error as ClientError};
 use crate::ha::action;
+use crate::ha::client::{CommandWriter, Error as ClientError};
 use crate::ha::url;
 use crate::keyring;
 use crate::protocol::{Command, ConnectionState, Level};
@@ -16,9 +16,12 @@ impl Daemon {
             Command::SetUrl { url: new_url } => self.set_url(new_url),
             Command::SetToken { token, url } => self.set_token(token, url).await,
             Command::ForgetToken => self.forget_token().await,
-            Command::SetAreaPrefs { order, hidden, hide_empty_areas, hide_entities_without_area } => {
-                self.set_area_prefs(order, hidden, hide_empty_areas, hide_entities_without_area)
-            }
+            Command::SetAreaPrefs {
+                order,
+                hidden,
+                hide_empty_areas,
+                hide_entities_without_area,
+            } => self.set_area_prefs(order, hidden, hide_empty_areas, hide_entities_without_area),
             Command::SetFavorites { ids, show } => {
                 self.config.favorites = ids;
                 if let Some(value) = show {
@@ -46,7 +49,11 @@ impl Daemon {
                 Outcome::Lost(ClientError::Closed)
             }
             Command::Action { entity_id, .. } => {
-                self.log(Level::Warn, "Not connected to Home Assistant.", Some(entity_id));
+                self.log(
+                    Level::Warn,
+                    "Not connected to Home Assistant.",
+                    Some(entity_id),
+                );
                 Outcome::Lost(ClientError::Closed)
             }
             Command::ImportDashboardPrefs => {
@@ -137,13 +144,26 @@ impl Daemon {
         Outcome::Lost(ClientError::Closed)
     }
 
-    pub(super) async fn handle_online(&mut self, command: Command, writer: &mut CommandWriter) -> Option<Outcome> {
+    pub(super) async fn handle_online(
+        &mut self,
+        command: Command,
+        writer: &mut CommandWriter,
+    ) -> Option<Outcome> {
         match command {
-            Command::Action { entity_id, action, data } => {
+            Command::Action {
+                entity_id,
+                action,
+                data,
+            } => {
                 match action::resolve(&entity_id, &action, &data) {
                     Ok(resolved) => {
                         if let Err(e) = writer
-                            .call_service(&resolved.domain, &resolved.service, &resolved.entity_id, resolved.data)
+                            .call_service(
+                                &resolved.domain,
+                                &resolved.service,
+                                &resolved.entity_id,
+                                resolved.data,
+                            )
                             .await
                         {
                             return Some(Outcome::Lost(e));
@@ -187,5 +207,4 @@ impl Daemon {
             },
         }
     }
-
 }
