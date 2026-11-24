@@ -23,8 +23,35 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
 
-  setup:
+  shell:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: shellcheck setup test-daemon-failure
+      - run: shellcheck bin/atriumd-launcher test-daemon-failure
+
+  # daemon-release.env must always name assets that exist and match, so a
+  # fresh clone of main can start its daemon. This downloads each one through
+  # the launcher itself, on its own architecture.
+  pin:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pinned release resolves
+        run: |
+          export XDG_DATA_HOME="$RUNNER_TEMP/data"
+          daemon=$(bin/atriumd-launcher --fetch)
+          echo "verified $daemon"
+      # Not an error: the panel runs the pinned daemon until the next release
+      # is cut and its pin lands, which is the normal state between releases.
+      - name: Pin is current with daemon/
+        if: matrix.runner == 'ubuntu-24.04'
+        run: |
+          tag=$(sed -n 's/^ATRIUMD_TAG=//p' daemon-release.env)
+          if ! git diff --quiet "$tag" HEAD -- daemon/; then
+            echo "::warning file=daemon-release.env::daemon/ has changed since $tag; installs keep running the $tag daemon until a release is cut and its pin is merged"
+          fi

@@ -1,7 +1,10 @@
 name: Release
 
 # Builds atriumd for each architecture and attaches it to the GitHub release
-# for the pushed tag, along with SHA256SUMS. `setup` downloads from here.
+# for the pushed tag, along with SHA256SUMS. Then opens a pull request that
+# points daemon-release.env at the new assets: bin/atriumd-launcher only ever
+# downloads what that file pins, so main never names a release that is not
+# published yet.
 
 on:
   push:
@@ -87,3 +90,61 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
           fi
+
+  # The pin is computed from the assets as GitHub serves them, not from the
+  # build output, and checked through the launcher before the PR is opened.
+  # Needs "Allow GitHub Actions to create and approve pull requests" in the
+  # repository's Actions settings. A PR opened with GITHUB_TOKEN does not start
+  # CI on its own; close and reopen it, or push to its branch, to run CI.
+  pin:
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Download published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir "$RUNNER_TEMP/published"
+          gh release download "$GITHUB_REF_NAME" --pattern 'atriumd-*' --dir "$RUNNER_TEMP/published"
+      - name: Write daemon-release.env
+        run: |
+          pinned() {
+            local asset="$RUNNER_TEMP/published/atriumd-$1-unknown-linux-gnu" key=$2
+            echo "ATRIUMD_${key}_ASSET=atriumd-$1-unknown-linux-gnu"
+            echo "ATRIUMD_${key}_SIZE=$(stat -c %s "$asset")"
+            echo "ATRIUMD_${key}_SHA256=$(sha256sum "$asset" | cut -d' ' -f1)"
+          }
+          {
+            sed -n '/^#/p' daemon-release.env
+            echo "ATRIUMD_TAG=$GITHUB_REF_NAME"
+            pinned x86_64 X86_64
+            pinned aarch64 AARCH64
+          } >"$RUNNER_TEMP/daemon-release.env"
+          mv "$RUNNER_TEMP/daemon-release.env" daemon-release.env
+          cat daemon-release.env
+      - name: Launcher accepts the new pin
+        run: XDG_DATA_HOME="$RUNNER_TEMP/data" bin/atriumd-launcher --fetch
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- daemon-release.env; then
+            echo "daemon-release.env already pins $GITHUB_REF_NAME"
+            exit 0
+          fi
+          branch="pin-atriumd-$GITHUB_REF_NAME"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "Pin atriumd $GITHUB_REF_NAME"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "Pin atriumd $GITHUB_REF_NAME" \
+            --body "Points daemon-release.env at the $GITHUB_REF_NAME release assets. Sizes and SHA256s were computed from the published files and checked with bin/atriumd-launcher --fetch. Once merged, installs and updates download $GITHUB_REF_NAME on their next start."
