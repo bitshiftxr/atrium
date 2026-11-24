@@ -23,6 +23,11 @@ pub enum Command {
         #[serde(default)]
         data: Value,
     },
+    /// Every plain on/off device a tab shows, switched together.
+    AreaPower {
+        tab: String,
+        on: bool,
+    },
     SetAreaPrefs {
         // Absent means "leave it alone". An omitted list must never be read as
         // an instruction to clear a hand-built room order.
@@ -173,6 +178,20 @@ mod tests {
         };
         assert_eq!(entity_id, "light.desk");
         assert_eq!(action, "toggle");
+    }
+
+    #[test]
+    fn an_area_power_command_names_the_tab_and_the_direction() {
+        let Command::AreaPower { tab, on } =
+            parse(r#"{"cmd":"areaPower","tab":"area:kitchen","on":false}"#)
+        else {
+            panic!("expected area power");
+        };
+        assert_eq!(tab, "area:kitchen");
+        assert!(!on);
+        assert!(
+            serde_json::from_str::<Command>(r#"{"cmd":"areaPower","tab":"area:kitchen"}"#).is_err()
+        );
     }
 
     #[test]

@@ -407,6 +407,30 @@ impl CommandWriter {
         entity_id: &str,
         data: Value,
     ) -> Result<u64, Error> {
+        self.call_service_on(domain, service, json!(entity_id), data)
+            .await
+    }
+
+    /// One call for several entities of the same domain. Home Assistant takes a
+    /// list as the target, so a room switch costs one frame per domain rather
+    /// than one per device.
+    pub async fn call_service_many(
+        &mut self,
+        domain: &str,
+        service: &str,
+        entity_ids: &[String],
+    ) -> Result<u64, Error> {
+        self.call_service_on(domain, service, json!(entity_ids), json!({}))
+            .await
+    }
+
+    async fn call_service_on(
+        &mut self,
+        domain: &str,
+        service: &str,
+        target: Value,
+        data: Value,
+    ) -> Result<u64, Error> {
         let mut service_data = match data {
             Value::Object(map) => map,
             _ => serde_json::Map::new(),
@@ -421,7 +445,7 @@ impl CommandWriter {
             "domain": domain,
             "service": service,
             "service_data": Value::Object(service_data),
-            "target": { "entity_id": entity_id },
+            "target": { "entity_id": target },
         });
         self.send(message).await?;
         Ok(id)
