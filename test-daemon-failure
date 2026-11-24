@@ -1,9 +1,11 @@
 #!/bin/bash
 
 # Drives Service.qml against a daemon that is not there, one that spawns and
-# dies, the real one, and one that appears partway through the run. Needs a
-# Wayland session; each case waits out the timers in DaemonFailureTest.qml, so
-# the whole run takes about a minute and a half.
+# dies, the launcher refusing a download that does not match its pin, the real
+# daemon through the launcher, and one that appears partway through the run.
+# Needs a Wayland session and the network (the launcher downloads the pinned
+# release into a temporary XDG_DATA_HOME); each case waits out the timers in
+# DaemonFailureTest.qml, so the whole run takes about two minutes.
 
 set -uo pipefail
 
@@ -14,17 +16,25 @@ trap 'rm -rf "$work"' EXIT
 printf '#!/bin/sh\nexit 1\n' >"$work/dies-on-startup"
 chmod +x "$work/dies-on-startup"
 
-[[ -x $root/bin/atriumd ]] || {
-  echo "test-daemon-failure: build the daemon first: $root/setup" >&2
+export XDG_DATA_HOME="$work/data"
+daemon=$("$root/bin/atriumd-launcher" --fetch) || {
+  echo "test-daemon-failure: the launcher could not fetch atriumd" >&2
   exit 1
 }
 
+# A copy of the launcher whose pin names the right asset with the wrong hash.
+mkdir -p "$work/bad-pin/bin"
+cp "$root/bin/atriumd-launcher" "$work/bad-pin/bin/"
+sed '/_SHA256=/{s/0$/x/; s/[1-9a-f]$/0/; s/x$/1/}' \
+  "$root/daemon-release.env" >"$work/bad-pin/daemon-release.env"
+
 status=0
 run() {
-  local name=$1 expect=$2 daemon=$3
+  local name=$1 expect=$2 daemon=$3 contains=${4:-}
   echo "== $name"
   rm -f "$work/config.json"
   ATRIUM_TEST_EXPECT="$expect" \
+    ATRIUM_TEST_PROBLEM_CONTAINS="$contains" \
     ATRIUM_CONFIG="$work/config.json" \
     ATRIUM_DAEMON="$daemon" \
     timeout 60 qs -p "$root/DaemonFailureTest.qml" 2>&1 |
@@ -35,10 +45,12 @@ run() {
 
 run "missing binary"   failure  "$work/not-a-binary"
 run "dies on startup"  failure  "$work/dies-on-startup"
-run "working daemon"   ok       "$root/bin/atriumd"
+run "pin mismatch"     failure  "$work/bad-pin/bin/atriumd-launcher" \
+  "does not match its pinned SHA256"
+run "working daemon"   ok       "$root/bin/atriumd-launcher"
 
 rm -f "$work/appears-late"
-( sleep 12; cp "$root/bin/atriumd" "$work/appears-late" ) &
+( sleep 12; cp "$daemon" "$work/appears-late" ) &
 run "recovers"         recovery "$work/appears-late"
 wait
 
