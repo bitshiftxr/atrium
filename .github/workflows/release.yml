@@ -84,9 +84,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+        # A committed pin depends on these exact bytes, so a re-run must never
+        # replace them. An existing release without assets is filled in; one
+        # that already has any of them fails the job.
         run: |
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            existing=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | grep -E '^(atriumd-|SHA256SUMS$)' || true)
+            if [[ -n $existing ]]; then
+              echo "::error::release $GITHUB_REF_NAME already has $(echo $existing); refusing to replace assets a pin may depend on"
+              exit 1
+            fi
+            gh release upload "$GITHUB_REF_NAME" dist/*
           else
             gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
           fi
@@ -106,7 +114,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+      # Re-running an older tag's release must not open a PR that moves main
+      # back to it.
+      - name: Newer than the current pin
+        id: newer
+        run: |
+          current=$(sed -n 's/^ATRIUMD_TAG=//p' daemon-release.env)
+          newest=$(printf '%s\n%s\n' "${current#v}" "${GITHUB_REF_NAME#v}" | sort -V | tail -n 1)
+          if [[ $GITHUB_REF_NAME == "$current" || $newest != "${GITHUB_REF_NAME#v}" ]]; then
+            echo "::notice::main already pins $current; $GITHUB_REF_NAME is not newer, so no pin PR"
+            echo "skip=true" >>"$GITHUB_OUTPUT"
+          fi
       - name: Download published assets
+        if: steps.newer.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -114,6 +134,7 @@ jobs:
           mkdir "$RUNNER_TEMP/published"
           gh release download "$GITHUB_REF_NAME" --pattern 'atriumd-*' --dir "$RUNNER_TEMP/published"
       - name: Write daemon-release.env
+        if: steps.newer.outputs.skip != 'true'
         run: |
           pinned() {
             local asset="$RUNNER_TEMP/published/atriumd-$1-unknown-linux-gnu" key=$2
@@ -130,8 +151,10 @@ jobs:
           mv "$RUNNER_TEMP/daemon-release.env" daemon-release.env
           cat daemon-release.env
       - name: Launcher accepts the new pin
+        if: steps.newer.outputs.skip != 'true'
         run: XDG_DATA_HOME="$RUNNER_TEMP/data" bin/atriumd-launcher --fetch
       - name: Open the pull request
+        if: steps.newer.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

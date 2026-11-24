@@ -110,20 +110,29 @@ verified() {
   local candidate=$1 actual
   [[ -f $candidate && ! -L $candidate && -x $candidate ]] || return 1
   [[ $(stat -c %s -- "$candidate") == "$size" ]] || return 1
-  actual=$(sha256sum -- "$candidate") || return 1
+  # Hashed from stdin, so the path never appears in sha256sum's output,
+  # where a backslash or newline in it would be escaped.
+  actual=$(sha256sum <"$candidate") || return 1
   [[ ${actual%% *} == "$sha256" ]]
 }
 
+# Global rather than local to download(), so the EXIT trap can still see it
+# when fail() exits from inside download().
+stage=""
+remove_stage() {
+  [[ -z $stage ]] || rm -rf -- "$stage"
+  stage=""
+}
+
 download() {
-  local stage staged url status error got_size got_sha
+  local staged url status error got_size got_sha
   command -v curl >/dev/null 2>&1 || fail "required command not found: curl"
   # A launcher killed mid-download leaves its staging directory behind. One
   # this old is not another launcher's download still in progress.
   find "$cache_dir" -mindepth 1 -maxdepth 1 -type d -name '.download.*' -mmin +60 \
     -exec rm -rf -- {} + 2>/dev/null
   stage=$(mktemp -d "$cache_dir/.download.XXXXXX") || fail "could not create a download directory"
-  # shellcheck disable=SC2064 # the path is fixed now, on purpose
-  trap "rm -rf -- '$stage'" EXIT
+  trap remove_stage EXIT
   staged="$stage/$asset"
   url="https://github.com/$repository/releases/download/$tag/$asset"
 
@@ -144,7 +153,7 @@ download() {
   got_size=$(stat -c %s -- "$staged") || fail "could not inspect the atriumd $tag download"
   [[ $got_size == "$size" ]] \
     || fail "the atriumd $tag download is $got_size bytes, not the pinned $size; refusing to run it"
-  got_sha=$(sha256sum -- "$staged") || fail "could not hash the atriumd $tag download"
+  got_sha=$(sha256sum <"$staged") || fail "could not hash the atriumd $tag download"
   got_sha=${got_sha%% *}
   if [[ $got_sha != "$sha256" ]]; then
     printf '  pinned SHA256 %s\n  download SHA256 %s\n' "$sha256" "$got_sha" >&2
@@ -157,7 +166,7 @@ download() {
   if ! verified "$binary"; then
     mv -fT -- "$staged" "$binary" || fail "could not move atriumd into $cache_dir"
   fi
-  rm -rf -- "$stage"
+  remove_stage
   trap - EXIT
   verified "$binary" || fail "atriumd $tag did not verify after download"
 }
