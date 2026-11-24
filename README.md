@@ -37,8 +37,15 @@ which is committed alongside the plugin, and refuses to run anything that does
 not match. The verified binary is kept in
 `${XDG_DATA_HOME:-~/.local/share}/atrium/<release>/`, outside the plugin folder,
 and is checked against the pin again on every start, so later starts work
-offline. If the download fails or does not match, the panel says why and keeps
-retrying.
+offline. A cached binary that no longer matches is downloaded again.
+
+If the download fails or does not match the pin, nothing is run. The panel
+shows an error banner beginning `atriumd could not start:` with the reason, for
+example `the atriumd v0.1.0 download does not match its pinned SHA256; refusing
+to run it`, or `could not download atriumd v0.1.0: ...` when you are offline.
+The same text appears on the Connection pane in settings. Atrium retries on its
+own, waiting longer between attempts up to five minutes, and the banner clears
+once the daemon starts.
 
 `omarchy plugin update` brings in a new `daemon-release.env` along with the
 rest of the plugin, and the next start downloads the release it names. Older
@@ -50,7 +57,7 @@ releases' folders under `~/.local/share/atrium/` can be deleted.
 omarchy bar move io.github.bitshiftxr.atrium --section left
 ```
 
-## Setup
+## Connecting to Home Assistant
 
 Open the panel and press `s`, then enter your Home Assistant address and an
 access token. Tokens live in Home Assistant under your profile → Security →
