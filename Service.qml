@@ -121,15 +121,17 @@ QtObject {
   readonly property bool needsSetup: connectionState === "unconfigured"
     || connectionState === "needsToken"
   readonly property bool daemonFailed: bridge.failed
-  readonly property string daemonFailureText:
-    "atriumd is not running — run setup in the Atrium plugin folder to install it."
+  readonly property string daemonFailureText: bridge.launcherError !== ""
+    ? "atriumd could not start: " + bridge.launcherError
+    : "atriumd is not running. Atrium will keep trying to start it."
 
   readonly property string daemonPath: {
     var override = Quickshell.env("ATRIUM_DAEMON")
     if (override && override.length > 0) return String(override)
-    // Qt.resolvedUrl percent-encodes, so a space in the install path would
-    // otherwise reach exec() as %20 and never start.
-    return decodeURIComponent(String(Qt.resolvedUrl("bin/atriumd")).replace(/^file:\/\//, ""))
+    // The launcher fetches and verifies the release binary that
+    // daemon-release.env pins, then execs it. Qt.resolvedUrl percent-encodes,
+    // so a space in the plugin path would otherwise reach exec() as %20.
+    return decodeURIComponent(String(Qt.resolvedUrl("bin/atriumd-launcher")).replace(/^file:\/\//, ""))
   }
 
   signal opened()
@@ -474,6 +476,7 @@ QtObject {
 
   // Unlike a daemon-reported problem, this one does not resolve on its own, so
   // it outlives problemTimer rather than clearing twelve seconds later.
+  property bool showingDaemonFailure: false
   property Connections daemonFailure: Connections {
     target: root.bridge
     function onFailedChanged() {
@@ -481,9 +484,23 @@ QtObject {
         problemTimer.stop()
         root.problem = root.daemonFailureText
         root.problemLevel = "error"
-      } else if (root.problem === root.daemonFailureText) {
-        root.problem = ""
-        root.problemLevel = ""
+        root.showingDaemonFailure = true
+      } else if (root.showingDaemonFailure) {
+        if (root.problem === root.daemonFailureText) {
+          root.problem = ""
+          root.problemLevel = ""
+        }
+        root.showingDaemonFailure = false
+      }
+    }
+    // A later attempt can fail for a different reason, such as a download
+    // that worked but did not match its pin.
+    function onLauncherErrorChanged() {
+      if (root.bridge.failed && root.showingDaemonFailure
+          && root.problem !== root.daemonFailureText) {
+        problemTimer.stop()
+        root.problem = root.daemonFailureText
+        root.problemLevel = "error"
       }
     }
   }

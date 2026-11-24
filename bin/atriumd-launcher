@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+
+# Starts the atriumd daemon pinned by daemon-release.env.
+#
+#   bin/atriumd-launcher serve      what the shell runs
+#   bin/atriumd-launcher --fetch    download and verify if needed, print the
+#                                   binary's path, and exit
+#
+# The pin names a GitHub release, and for each architecture the asset's name,
+# size and SHA256. The verified binary is kept under
+# ${XDG_DATA_HOME:-~/.local/share}/atrium/<tag>/, and every start checks it
+# against the pin again. A missing or altered binary is downloaded again; a
+# download that does not match the pin is refused. Nothing is ever written
+# inside the plugin folder, because the shell reloads on file events there.
+#
+# Errors go to stderr as one line starting with "atriumd-launcher: ", which the
+# panel shows as the reason the daemon is not running.
+
+set -uo pipefail
+
+plugin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)" || exit 1
+readonly plugin_dir
+readonly pin_file="$plugin_dir/daemon-release.env"
+readonly repository="bitshiftxr/atrium"
+readonly max_bytes=$((64 * 1024 * 1024))
+
+fail() {
+  printf 'atriumd-launcher: %s\n' "$*" >&2
+  exit 1
+}
+
+fetch_only=false
+if [[ ${1:-} == --fetch ]]; then
+  fetch_only=true
+  shift
+  (( $# == 0 )) || fail "--fetch takes no arguments"
+fi
+
+for tool in sha256sum stat; do
+  command -v "$tool" >/dev/null 2>&1 || fail "required command not found: $tool"
+done
+
+# The pin is parsed, never sourced: it is data, and only the fields below are
+# accepted.
+[[ -f $pin_file && ! -L $pin_file ]] || fail "daemon-release.env is missing"
+
+tag="" x86_64_asset="" x86_64_size="" x86_64_sha256=""
+aarch64_asset="" aarch64_size="" aarch64_sha256=""
+declare -A seen=()
+while IFS='=' read -r key value || [[ -n ${key:-}${value:-} ]]; do
+  [[ -z $key || $key == \#* ]] && continue
+  [[ -n $value && $key != *[[:space:]]* && $value != *[[:space:]]* ]] \
+    || fail "daemon-release.env is malformed"
+  [[ -z ${seen[$key]+x} ]] || fail "daemon-release.env repeats $key"
+  seen[$key]=1
+  case "$key" in
+    ATRIUMD_TAG) tag=$value ;;
+    ATRIUMD_X86_64_ASSET) x86_64_asset=$value ;;
+    ATRIUMD_X86_64_SIZE) x86_64_size=$value ;;
+    ATRIUMD_X86_64_SHA256) x86_64_sha256=$value ;;
+    ATRIUMD_AARCH64_ASSET) aarch64_asset=$value ;;
+    ATRIUMD_AARCH64_SIZE) aarch64_size=$value ;;
+    ATRIUMD_AARCH64_SHA256) aarch64_sha256=$value ;;
+    *) fail "daemon-release.env has an unknown field: $key" ;;
+  esac
+done <"$pin_file"
+(( ${#seen[@]} == 7 )) || fail "daemon-release.env is incomplete"
+[[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "daemon-release.env has an invalid tag"
+
+case "$(uname -m)" in
+  x86_64 | amd64)
+    triple=x86_64-unknown-linux-gnu
+    asset=$x86_64_asset size=$x86_64_size sha256=$x86_64_sha256 ;;
+  aarch64 | arm64)
+    triple=aarch64-unknown-linux-gnu
+    asset=$aarch64_asset size=$aarch64_size sha256=$aarch64_sha256 ;;
+  *) fail "there is no prebuilt atriumd for $(uname -m)" ;;
+esac
+[[ $asset == "atriumd-$triple" ]] || fail "daemon-release.env names the wrong asset for $triple"
+[[ $size =~ ^[1-9][0-9]{0,9}$ ]] || fail "daemon-release.env has an invalid size for $triple"
+(( size <= max_bytes )) || fail "daemon-release.env pins more than $max_bytes bytes for $triple"
+[[ $sha256 =~ ^[0-9a-f]{64}$ ]] || fail "daemon-release.env has an invalid SHA256 for $triple"
+
+data_home="${XDG_DATA_HOME:-${HOME:?HOME is not set}/.local/share}"
+data_home="${data_home%/}"
+[[ $data_home == /* && $data_home != *//* ]] || fail "XDG_DATA_HOME must be an absolute path"
+cache_root="$data_home/atrium"
+cache_dir="$cache_root/$tag"
+binary="$cache_dir/$asset"
+[[ $cache_dir/ != "$plugin_dir"/* ]] || fail "the daemon cache cannot be inside the plugin folder"
+
+# The cache directories belong to this user alone, so nobody else can swap the
+# binary between the hash check and exec.
+private_dir() {
+  local dir=$1 owner
+  if [[ ! -e $dir && ! -L $dir ]]; then
+    mkdir -m 0700 -- "$dir" 2>/dev/null || [[ -d $dir ]] \
+      || fail "could not create $dir"
+  fi
+  [[ -d $dir && ! -L $dir ]] || fail "$dir is not a directory"
+  owner=$(stat -c %u -- "$dir") || fail "could not inspect $dir"
+  [[ $owner == "$EUID" ]] || fail "$dir belongs to another user"
+  chmod 0700 -- "$dir" || fail "could not protect $dir"
+}
+mkdir -p -- "$data_home" || fail "could not create $data_home"
+private_dir "$cache_root"
+private_dir "$cache_dir"
+
+verified() {
+  local candidate=$1 actual
+  [[ -f $candidate && ! -L $candidate && -x $candidate ]] || return 1
+  [[ $(stat -c %s -- "$candidate") == "$size" ]] || return 1
+  # Hashed from stdin, so the path never appears in sha256sum's output,
+  # where a backslash or newline in it would be escaped.
+  actual=$(sha256sum <"$candidate") || return 1
+  [[ ${actual%% *} == "$sha256" ]]
+}
+
+# Global rather than local to download(), so the EXIT trap can still see it
+# when fail() exits from inside download().
+stage=""
+remove_stage() {
+  [[ -z $stage ]] || rm -rf -- "$stage"
+  stage=""
+}
+
+download() {
+  local staged url status error got_size got_sha
+  command -v curl >/dev/null 2>&1 || fail "required command not found: curl"
+  # A launcher killed mid-download leaves its staging directory behind. One
+  # this old is not another launcher's download still in progress.
+  find "$cache_dir" -mindepth 1 -maxdepth 1 -type d -name '.download.*' -mmin +60 \
+    -exec rm -rf -- {} + 2>/dev/null
+  stage=$(mktemp -d "$cache_dir/.download.XXXXXX") || fail "could not create a download directory"
+  trap remove_stage EXIT
+  staged="$stage/$asset"
+  url="https://github.com/$repository/releases/download/$tag/$asset"
+
+  status=0
+  error=$(curl --fail --location --silent --show-error \
+    --proto '=https' --proto-redir '=https' \
+    --connect-timeout 10 --max-time 300 --retry 2 \
+    --max-filesize "$max_bytes" --output "$staged" "$url" 2>&1) || status=$?
+  if (( status != 0 )); then
+    (( status == 63 )) && fail "the atriumd $tag download is larger than pinned; refusing it"
+    # Keep curl's last line, minus its "curl: (7) " prefix.
+    error=${error##*$'\n'}
+    [[ $error =~ ^curl:\ \([0-9]+\)\ (.+)$ ]] && error=${BASH_REMATCH[1]}
+    fail "could not download atriumd $tag: ${error:-curl exited with $status}. Atrium will keep trying"
+  fi
+
+  [[ -f $staged && ! -L $staged ]] || fail "the atriumd $tag download is not a file"
+  got_size=$(stat -c %s -- "$staged") || fail "could not inspect the atriumd $tag download"
+  [[ $got_size == "$size" ]] \
+    || fail "the atriumd $tag download is $got_size bytes, not the pinned $size; refusing to run it"
+  got_sha=$(sha256sum <"$staged") || fail "could not hash the atriumd $tag download"
+  got_sha=${got_sha%% *}
+  if [[ $got_sha != "$sha256" ]]; then
+    printf '  pinned SHA256 %s\n  download SHA256 %s\n' "$sha256" "$got_sha" >&2
+    fail "the atriumd $tag download does not match its pinned SHA256; refusing to run it"
+  fi
+  chmod 0755 -- "$staged" || fail "could not make atriumd executable"
+
+  # Another launcher may have finished first with the same bytes; either way
+  # the binary only ever appears whole, by rename.
+  if ! verified "$binary"; then
+    mv -fT -- "$staged" "$binary" || fail "could not move atriumd into $cache_dir"
+  fi
+  remove_stage
+  trap - EXIT
+  verified "$binary" || fail "atriumd $tag did not verify after download"
+}
+
+verified "$binary" || download
+
+if $fetch_only; then
+  printf '%s\n' "$binary"
+  exit 0
+fi
+
+exec "$binary" "$@"

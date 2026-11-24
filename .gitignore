@@ -1,4 +1,5 @@
 target/
+# Left behind by installs from before bin/atriumd-launcher; never run.
 bin/atriumd
 config.json
 .op/

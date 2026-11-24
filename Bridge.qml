@@ -9,6 +9,18 @@ QtObject {
   property bool failed: false
   property string lastError: ""
 
+  // bin/atriumd-launcher reports why it could not start the daemon (a failed
+  // download, a binary that does not match its pin) on a stderr line with this
+  // prefix. It is kept per run and published when the run ends, so the reason
+  // the panel shows does not flicker while a retry is under way.
+  readonly property string launcherPrefix: "atriumd-launcher: "
+  property string launcherError: ""
+  property string runLauncherError: ""
+
+  // Runs in a row that ended before the first event. Each retry may be a
+  // download, so the wait between them doubles, up to five minutes.
+  property int failedRuns: 0
+
   // A run that never says anything is a run that did not work. Spawning
   // succeeds for a binary that then dies on startup, so onStarted alone proves
   // nothing; the first event does.
@@ -21,6 +33,7 @@ QtObject {
   function start() {
     if (proc.running || daemonPath === "") return
     proc.command = [daemonPath, "serve"]
+    runLauncherError = ""
     proc.running = true
     sawEvent = false
     startWatchdog.restart()
@@ -62,6 +75,8 @@ QtObject {
     if (!payload || typeof payload !== "object") return
     if (!root.sawEvent) {
       root.sawEvent = true
+      root.failedRuns = 0
+      root.launcherError = ""
       root.failed = false
     }
     root.event(payload)
@@ -78,11 +93,22 @@ QtObject {
     onExited: function(code, status) {
       root.started = false
       if (code !== 0) root.lastError = "atriumd exited with status " + code
-      if (!root.sawEvent) root.failed = true
+      if (!root.sawEvent) {
+        root.failedRuns++
+        root.launcherError = root.runLauncherError
+        root.failed = true
+      }
+      restartTimer.interval = Math.min(2000 * Math.pow(2, Math.max(0, root.failedRuns - 1)), 300000)
       restartTimer.restart()
     }
     stdout: SplitParser { onRead: function(line) { root.receive(line) } }
-    stderr: SplitParser { onRead: function(line) { root.lastError = line } }
+    stderr: SplitParser {
+      onRead: function(line) {
+        root.lastError = line
+        if (line.indexOf(root.launcherPrefix) === 0)
+          root.runLauncherError = line.slice(root.launcherPrefix.length)
+      }
+    }
   }
 
   property Timer restartTimer: Timer {

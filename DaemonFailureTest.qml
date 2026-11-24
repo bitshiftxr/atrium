@@ -6,6 +6,7 @@ ShellRoot {
 
   readonly property string mode: Quickshell.env("ATRIUM_TEST_EXPECT") || "ok"
   readonly property bool expectFailure: mode !== "ok"
+  readonly property string problemContains: Quickshell.env("ATRIUM_TEST_PROBLEM_CONTAINS") || ""
   property var service: null
   property int failures: 0
 
@@ -42,6 +43,9 @@ ShellRoot {
         harness.expectFailure ? harness.service.daemonFailureText : "")
       harness.check("problemLevel", harness.service.problemLevel,
         harness.expectFailure ? "error" : "")
+      if (harness.problemContains !== "")
+        harness.check("problem names the cause",
+          harness.service.problem.indexOf(harness.problemContains) >= 0, true)
       if (harness.mode === "ok") harness.finish()
     }
   }
