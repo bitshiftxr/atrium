@@ -242,6 +242,13 @@ Panel {
             checked: root.roomAllOn
             onToggled: root.toggleRoom()
 
+            // The device rows' switch size (EntityRow.qml), rather than the
+            // full-height form control ToggleSwitch defaults to.
+            trackWidth: Style.space(26)
+            trackHeight: Style.space(14)
+            knobSize: Style.space(10)
+            knobInset: 1
+
             // ToggleSwitch paints its on state from the theme's
             // [controls] selected-color, which a theme may set to a fixed
             // colour that no property here can reach. While on, this covers
