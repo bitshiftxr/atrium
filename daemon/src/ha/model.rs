@@ -287,12 +287,19 @@ fn default_icon(domain: &str, device_class: Option<&str>, active: bool) -> &'sta
     }
 }
 
+/// A state Home Assistant reports for a device it cannot currently speak for.
+/// The panel dims these rows, and the room switch leaves them out; both read
+/// it from here so they always agree on which devices count.
+pub fn is_unavailable(state: &str) -> bool {
+    matches!(state, "unavailable" | "unknown")
+}
+
 pub fn row(entity: &Value, registry_name: Option<&str>, registry_icon: Option<&str>) -> Option<Row> {
     let entity_id = entity.get("entity_id")?.as_str()?.to_string();
     let domain = domain_of(&entity_id).to_string();
     let state = entity.get("state").and_then(Value::as_str).unwrap_or("unknown").to_string();
     let active = is_active(&domain, &state);
-    let unavailable = matches!(state.as_str(), "unavailable" | "unknown");
+    let unavailable = is_unavailable(&state);
 
     let name = registry_name
         .map(text::plain)

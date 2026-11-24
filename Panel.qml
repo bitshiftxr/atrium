@@ -26,6 +26,12 @@ Panel {
   // whole column sits evenly between the panel's edges.
   readonly property real pad: Style.spacing.rowPaddingX
   readonly property bool currentPinned: service ? service.isPinnedTab(activeTab) : false
+  readonly property bool roomSwitchable: service ? service.currentTabSwitchable : false
+  readonly property bool roomAnyOn: service ? service.currentTabAnyOn : false
+
+  function toggleRoom() {
+    if (service && roomSwitchable) service.toggleArea(service.currentTabId)
+  }
 
   // Anchored to an entity id, not a position: the daemon re-indexes this list
   // whenever an entity appears or drops, and a stale index would put the
@@ -131,6 +137,7 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(text) {
         switch (text) {
+        case "a": case "A": root.toggleRoom(); break
         case "e": case "E": root.expandCursor(); break
         case "r": case "R": if (root.service) root.service.refresh(); break
         case "s": case "S": if (root.service) root.service.openSettings("connection"); break
@@ -215,13 +222,25 @@ Panel {
           Dropdown {
             id: roomPicker
             anchors.left: parent.left
-            anchors.right: parent.right
+            anchors.right: roomSwitch.visible ? roomSwitch.left : parent.right
             anchors.leftMargin: root.pad
-            anchors.rightMargin: root.pad
+            anchors.rightMargin: roomSwitch.visible ? Style.spacing.md : root.pad
             label: "Room"
             showLabel: false
             options: root.service ? root.service.tabOptions : []
             onChanged: function(next) { root.selectTab(next) }
+          }
+
+          // Every light, switch, fan and toggle in the room at once. Never
+          // locks, covers, climate or media; the daemon enforces that.
+          ToggleSwitch {
+            id: roomSwitch
+            anchors.right: parent.right
+            anchors.rightMargin: root.pad
+            anchors.verticalCenter: roomPicker.verticalCenter
+            visible: root.roomSwitchable
+            checked: root.roomAnyOn
+            onToggled: root.toggleRoom()
           }
 
           // Dropdown assigns to its own `value` when an item is picked, which

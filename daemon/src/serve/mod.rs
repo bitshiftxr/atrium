@@ -207,16 +207,28 @@ impl Daemon {
         filter::is_visible(entity_id, self.entities.get(entity_id))
     }
 
-    fn emit_projection(&self) {
+    fn live_ids(&self) -> Vec<String> {
         let mut live: Vec<String> = self.states.keys().cloned().collect();
         live.sort();
+        live
+    }
+
+    /// The tabs exactly as the panel receives them. Anything that acts on "what
+    /// a tab shows" reads them from here rather than from the raw area, so an
+    /// entity hidden in Home Assistant or in Atrium is never touched.
+    fn tabs(&self) -> Vec<crate::ha::registry::Tab> {
         let mut tabs = self
             .registry
-            .project_tabs(&live, &self.config.areas, |id| self.display_name(id));
+            .project_tabs(&self.live_ids(), &self.config.areas, |id| self.display_name(id));
         if let Some(pinned) = self.pinned_tab() {
             tabs.insert(0, pinned);
         }
-        self.emit(Event::Tabs { tabs });
+        tabs
+    }
+
+    fn emit_projection(&self) {
+        let live = self.live_ids();
+        self.emit(Event::Tabs { tabs: self.tabs() });
         self.emit(Event::Areas {
             areas: self.registry.area_choices(&live, &self.config.areas),
         });

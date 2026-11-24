@@ -1,6 +1,7 @@
 use serde_json::{json, Map, Value};
 
 use crate::ha::filter::domain_of;
+use crate::ha::model::is_unavailable;
 use crate::ha::text::valid_entity_id;
 
 // Wide enough for either unit and any thermostat, narrow enough that a bad
@@ -169,6 +170,47 @@ pub fn resolve(entity_id: &str, action: &str, data: &Value) -> Result<ServiceCal
     Ok(resolved)
 }
 
+/// The domains an area's all-on/all-off switch reaches: the same plain on/off
+/// set Home Assistant's dashboard header toggle uses. Locks, covers, alarm
+/// panels, climate and media players are deliberately absent; switching a room
+/// off must never unlock a door or open a garage.
+pub const AREA_POWER_DOMAINS: &[&str] = &["light", "switch", "fan", "input_boolean", "humidifier"];
+
+pub fn is_area_power_domain(entity_id: &str) -> bool {
+    AREA_POWER_DOMAINS.contains(&domain_of(entity_id))
+}
+
+/// One Home Assistant call covering every entity of one domain.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BulkCall {
+    pub domain: String,
+    pub service: &'static str,
+    pub entity_ids: Vec<String>,
+}
+
+/// Turns the entities a tab shows into one call per domain. `entities` is the
+/// tab's own list paired with each entity's current state, so only what the
+/// panel draws is ever touched. Unavailable and unknown entities are skipped,
+/// by the same rule that dims their rows: Home Assistant cannot vouch for them,
+/// and one failure would fail the whole call.
+pub fn area_power<'a>(entities: impl IntoIterator<Item = (&'a str, &'a str)>, on: bool) -> Vec<BulkCall> {
+    let service = if on { "turn_on" } else { "turn_off" };
+    let mut by_domain: std::collections::BTreeMap<&str, Vec<String>> = std::collections::BTreeMap::new();
+    for (entity_id, state) in entities {
+        if !valid_entity_id(entity_id) || !is_area_power_domain(entity_id) || is_unavailable(state) {
+            continue;
+        }
+        let ids = by_domain.entry(domain_of(entity_id)).or_default();
+        if !ids.iter().any(|id| id == entity_id) {
+            ids.push(entity_id.to_string());
+        }
+    }
+    by_domain
+        .into_iter()
+        .map(|(domain, entity_ids)| BulkCall { domain: domain.to_string(), service, entity_ids })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,5 +337,93 @@ mod tests {
                 "{bad} should be refused"
             );
         }
+    }
+
+    fn ids(calls: &[BulkCall]) -> Vec<(&str, &str, Vec<&str>)> {
+        calls
+            .iter()
+            .map(|c| (c.domain.as_str(), c.service, c.entity_ids.iter().map(String::as_str).collect()))
+            .collect()
+    }
+
+    #[test]
+    fn area_power_groups_one_call_per_domain() {
+        let calls = area_power(
+            [
+                ("light.desk", "on"),
+                ("switch.kettle", "off"),
+                ("light.lamp", "off"),
+                ("fan.ceiling", "on"),
+                ("input_boolean.guest", "off"),
+                ("humidifier.bedroom", "on"),
+            ],
+            false,
+        );
+        assert_eq!(
+            ids(&calls),
+            vec![
+                ("fan", "turn_off", vec!["fan.ceiling"]),
+                ("humidifier", "turn_off", vec!["humidifier.bedroom"]),
+                ("input_boolean", "turn_off", vec!["input_boolean.guest"]),
+                ("light", "turn_off", vec!["light.desk", "light.lamp"]),
+                ("switch", "turn_off", vec!["switch.kettle"]),
+            ]
+        );
+        assert!(area_power([("light.desk", "off")], true).iter().all(|c| c.service == "turn_on"));
+    }
+
+    #[test]
+    fn area_power_never_reaches_locks_covers_or_anything_else_sensitive() {
+        let calls = area_power(
+            [
+                ("lock.front_door", "locked"),
+                ("cover.garage", "closed"),
+                ("alarm_control_panel.house", "armed_away"),
+                ("climate.hall", "heat"),
+                ("media_player.tv", "playing"),
+                ("siren.alarm", "off"),
+                ("scene.movie", "scening"),
+                ("sensor.temperature", "21"),
+                ("light.desk", "off"),
+            ],
+            true,
+        );
+        assert_eq!(ids(&calls), vec![("light", "turn_on", vec!["light.desk"])]);
+        for on in [true, false] {
+            let only_locks = area_power([("lock.front_door", "locked"), ("lock.back_door", "unlocked")], on);
+            assert!(only_locks.is_empty(), "a lock must never be part of a bulk call");
+        }
+    }
+
+    #[test]
+    fn area_power_skips_unavailable_malformed_and_repeated_entities() {
+        let calls = area_power(
+            [
+                ("light.desk", "on"),
+                ("light.desk", "on"),
+                ("light.gone", "unavailable"),
+                ("switch.unknown", "unknown"),
+                ("Light.Bad", "on"),
+                ("light.", "on"),
+            ],
+            false,
+        );
+        assert_eq!(
+            ids(&calls),
+            vec![("light", "turn_off", vec!["light.desk"])]
+        );
+        assert!(area_power(std::iter::empty::<(&str, &str)>(), false).is_empty());
+    }
+
+    #[test]
+    fn area_power_skips_exactly_the_rows_the_panel_shows_as_unavailable() {
+        use crate::ha::model;
+        let states = ["on", "off", "unknown", "unavailable"];
+        for state in states {
+            let row = model::row(&json!({ "entity_id": "light.desk", "state": state }), None, None).unwrap();
+            let picked = !area_power([("light.desk", state)], true).is_empty();
+            assert_eq!(picked, !row.unavailable, "panel and daemon disagree on state {state:?}");
+        }
+        assert!(area_power([("switch.kettle", "unknown")], false).is_empty());
     }
 }

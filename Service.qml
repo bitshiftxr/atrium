@@ -205,6 +205,74 @@ QtObject {
     else if (controls.indexOf("openClose") !== -1) act(entityId, row.active ? "close" : "open")
   }
 
+  // Mirrors AREA_POWER_DOMAINS in daemon/src/ha/action.rs, which re-checks
+  // every entity itself. This copy only decides whether the switch shows and
+  // which way it points; it can never widen what the daemon will touch.
+  readonly property var areaPowerDomains: ["light", "switch", "fan", "input_boolean", "humidifier"]
+
+  // The tab the panel is drawing. activeTab is empty until the first choice,
+  // and the panel falls back to the first tab, so this does too.
+  readonly property string currentTabId: {
+    var tab = tabFor(activeTab)
+    if (!tab && tabs.length > 0) tab = tabs[0]
+    return tab ? tab.id : ""
+  }
+
+  function areaPowerRows(tabId) {
+    rowsRevision
+    var tab = tabFor(tabId)
+    if (!tab) return []
+    var ids = tab.entityIds || []
+    var out = []
+    for (var i = 0; i < ids.length; i++) {
+      var row = rowFor(ids[i])
+      if (row && !row.unavailable && areaPowerDomains.indexOf(row.domain) !== -1) out.push(row)
+    }
+    return out
+  }
+
+  // On when anything switchable is on, as Home Assistant's own room toggle.
+  function areaAnyOn(tabId) {
+    var list = areaPowerRows(tabId)
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].active) return true
+    }
+    return false
+  }
+
+  readonly property bool currentTabSwitchable: {
+    rowsRevision
+    return areaPowerRows(currentTabId).length > 0
+  }
+
+  readonly property bool currentTabAnyOn: {
+    rowsRevision
+    return areaAnyOn(currentTabId)
+  }
+
+  function setAreaPower(tabId, on) {
+    var list = areaPowerRows(tabId)
+    if (list.length === 0) return
+    // Only rows that will change get a state_changed back; marking the rest
+    // would report them as not responding.
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].active !== on) markPending(list[i].entityId)
+    }
+    bridge.send({ cmd: "areaPower", tab: tabId, on: on })
+  }
+
+  function toggleArea(tabId) {
+    setAreaPower(tabId, !areaAnyOn(tabId))
+  }
+
+  function tabNamed(name) {
+    var wanted = String(name).toLowerCase()
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].id === name || String(tabs[i].title).toLowerCase() === wanted) return tabs[i]
+    }
+    return null
+  }
+
   function setUrl(url) { bridge.send({ cmd: "setUrl", url: url }) }
   function setToken(token, url) {
     bridge.send({ cmd: "setToken", token: token, url: url || baseUrl })
@@ -448,6 +516,17 @@ QtObject {
       }
       root.act(entityId, "activate")
       return "ok"
+    }
+
+    // Locks, covers and alarm panels are never part of a room switch, so
+    // this needs no allowSensitiveIpc gate.
+    function toggleArea(area: string): string {
+      var tab = root.tabNamed(area)
+      if (!tab) return "unknown room " + area
+      if (root.areaPowerRows(tab.id).length === 0) return tab.title + " has nothing to switch"
+      var on = !root.areaAnyOn(tab.id)
+      root.setAreaPower(tab.id, on)
+      return tab.title + " " + (on ? "on" : "off")
     }
 
     function areas(): string {
