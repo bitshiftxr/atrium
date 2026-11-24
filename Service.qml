@@ -122,7 +122,7 @@ QtObject {
     || connectionState === "needsToken"
   readonly property bool daemonFailed: bridge.failed
   readonly property string daemonFailureText:
-    "atriumd is not running — run setup in the Atrium plugin folder to build it."
+    "atriumd is not running — run setup in the Atrium plugin folder to install it."
 
   readonly property string daemonPath: {
     var override = Quickshell.env("ATRIUM_DAEMON")
