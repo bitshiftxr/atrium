@@ -1,5 +1,5 @@
-use std::collections::{HashMap, VecDeque};
 use std::cell::RefCell;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -58,7 +58,9 @@ pub async fn run() -> std::io::Result<()> {
     let writer = tokio::spawn(async move {
         let mut stdout = tokio::io::stdout();
         while let Some(line) = out_rx.recv().await {
-            if stdout.write_all(line.as_bytes()).await.is_err() || stdout.write_all(b"\n").await.is_err() {
+            if stdout.write_all(line.as_bytes()).await.is_err()
+                || stdout.write_all(b"\n").await.is_err()
+            {
                 break;
             }
             let _ = stdout.flush().await;
@@ -111,7 +113,9 @@ mod lifecycle;
 
 impl Daemon {
     fn emit(&self, event: Event) {
-        let _ = self.out.send(Envelope::new(self.generation, event).to_line());
+        let _ = self
+            .out
+            .send(Envelope::new(self.generation, event).to_line());
     }
 
     fn log(&self, level: Level, text: impl Into<String>, entity_id: Option<String>) {
@@ -133,9 +137,15 @@ impl Daemon {
         self.emit(event);
     }
 
-    fn info(&self, text: impl Into<String>) { self.log(Level::Info, text, None) }
-    fn warn(&self, text: impl Into<String>) { self.log(Level::Warn, text, None) }
-    fn error(&self, text: impl Into<String>) { self.log(Level::Error, text, None) }
+    fn info(&self, text: impl Into<String>) {
+        self.log(Level::Info, text, None)
+    }
+    fn warn(&self, text: impl Into<String>) {
+        self.log(Level::Warn, text, None)
+    }
+    fn error(&self, text: impl Into<String>) {
+        self.log(Level::Error, text, None)
+    }
 
     fn replay_history(&self) {
         for event in self.history.borrow().iter() {
@@ -219,7 +229,9 @@ impl Daemon {
     fn tabs(&self) -> Vec<crate::ha::registry::Tab> {
         let mut tabs = self
             .registry
-            .project_tabs(&self.live_ids(), &self.config.areas, |id| self.display_name(id));
+            .project_tabs(&self.live_ids(), &self.config.areas, |id| {
+                self.display_name(id)
+            });
         if let Some(pinned) = self.pinned_tab() {
             tabs.insert(0, pinned);
         }
@@ -254,7 +266,9 @@ impl Daemon {
             id: "pinned".into(),
             title: "Pinned".into(),
             icon: "mdi:star".into(),
-            glyph: crate::ha::icons::glyph("mdi:star").map(String::from).unwrap_or_default(),
+            glyph: crate::ha::icons::glyph("mdi:star")
+                .map(String::from)
+                .unwrap_or_default(),
             entity_ids,
         })
     }
@@ -278,5 +292,4 @@ impl Daemon {
         rows.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
         self.emit(Event::Rows { rows });
     }
-
 }

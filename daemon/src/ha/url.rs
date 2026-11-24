@@ -34,9 +34,11 @@ pub fn parse(input: &str) -> Result<Endpoint, UrlError> {
         return Err(UrlError::Empty);
     }
 
-    let has_scheme = trimmed
-        .split_once("://")
-        .is_some_and(|(s, _)| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.'));
+    let has_scheme = trimmed.split_once("://").is_some_and(|(s, _)| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.')
+    });
     let candidate = if has_scheme {
         trimmed.to_string()
     } else {
@@ -62,7 +64,11 @@ pub fn parse(input: &str) -> Result<Endpoint, UrlError> {
     };
     let base = url.path().trim_end_matches('/');
 
-    let (http, ws) = if secure { ("https", "wss") } else { ("http", "ws") };
+    let (http, ws) = if secure {
+        ("https", "wss")
+    } else {
+        ("http", "ws")
+    };
     Ok(Endpoint {
         origin: format!("{http}://{authority}{base}"),
         websocket: format!("{ws}://{authority}{base}/api/websocket"),
@@ -103,7 +109,10 @@ mod tests {
 
     #[test]
     fn websocket_schemes_map_onto_their_http_twin() {
-        assert_eq!(ok("wss://ha.example.com").rest, "https://ha.example.com/api");
+        assert_eq!(
+            ok("wss://ha.example.com").rest,
+            "https://ha.example.com/api"
+        );
         assert_eq!(ok("ws://ha.example.com").rest, "http://ha.example.com/api");
     }
 
@@ -116,7 +125,10 @@ mod tests {
 
     #[test]
     fn trailing_slashes_do_not_double_up() {
-        assert_eq!(ok("https://ha.example.com/").websocket, "wss://ha.example.com/api/websocket");
+        assert_eq!(
+            ok("https://ha.example.com/").websocket,
+            "wss://ha.example.com/api/websocket"
+        );
     }
 
     #[test]
@@ -125,7 +137,10 @@ mod tests {
             parse("ftp://ha.example.com"),
             Err(UrlError::UnsupportedScheme("ftp".into()))
         );
-        assert!(matches!(parse("gopher://ha"), Err(UrlError::UnsupportedScheme(_))));
+        assert!(matches!(
+            parse("gopher://ha"),
+            Err(UrlError::UnsupportedScheme(_))
+        ));
     }
 
     #[test]

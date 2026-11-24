@@ -1,6 +1,6 @@
 use super::{Daemon, Outcome};
-use crate::ha::client::{CommandWriter, Error as ClientError};
 use crate::ha::action;
+use crate::ha::client::{CommandWriter, Error as ClientError};
 use crate::ha::url;
 use crate::keyring;
 use crate::protocol::{Command, ConnectionState, Level};
@@ -16,9 +16,12 @@ impl Daemon {
             Command::SetUrl { url: new_url } => self.set_url(new_url),
             Command::SetToken { token, url } => self.set_token(token, url).await,
             Command::ForgetToken => self.forget_token().await,
-            Command::SetAreaPrefs { order, hidden, hide_empty_areas, hide_entities_without_area } => {
-                self.set_area_prefs(order, hidden, hide_empty_areas, hide_entities_without_area)
-            }
+            Command::SetAreaPrefs {
+                order,
+                hidden,
+                hide_empty_areas,
+                hide_entities_without_area,
+            } => self.set_area_prefs(order, hidden, hide_empty_areas, hide_entities_without_area),
             Command::SetFavorites { ids, show } => {
                 self.config.favorites = ids;
                 if let Some(value) = show {
@@ -46,7 +49,11 @@ impl Daemon {
                 Outcome::Lost(ClientError::Closed)
             }
             Command::Action { entity_id, .. } => {
-                self.log(Level::Warn, "Not connected to Home Assistant.", Some(entity_id));
+                self.log(
+                    Level::Warn,
+                    "Not connected to Home Assistant.",
+                    Some(entity_id),
+                );
                 Outcome::Lost(ClientError::Closed)
             }
             Command::AreaPower { .. } => {
@@ -144,7 +151,11 @@ impl Daemon {
     /// The calls that switch every plain on/off device a tab shows, and the
     /// tab's title. The tab is re-projected here rather than trusted from the
     /// panel, so the set is exactly what is drawn now and never includes a lock.
-    fn area_power_calls(&self, tab_id: &str, on: bool) -> Result<(String, Vec<action::BulkCall>), String> {
+    fn area_power_calls(
+        &self,
+        tab_id: &str,
+        on: bool,
+    ) -> Result<(String, Vec<action::BulkCall>), String> {
         let Some(tab) = self.tabs().into_iter().find(|t| t.id == tab_id) else {
             return Err(format!("There is no room called {tab_id}."));
         };
@@ -154,12 +165,21 @@ impl Daemon {
         });
         let calls = action::area_power(states, on);
         if calls.is_empty() {
-            return Err(format!("{} has nothing to switch {}.", tab.title, if on { "on" } else { "off" }));
+            return Err(format!(
+                "{} has nothing to switch {}.",
+                tab.title,
+                if on { "on" } else { "off" }
+            ));
         }
         Ok((tab.title, calls))
     }
 
-    async fn area_power(&mut self, tab_id: &str, on: bool, writer: &mut CommandWriter) -> Option<Outcome> {
+    async fn area_power(
+        &mut self,
+        tab_id: &str,
+        on: bool,
+        writer: &mut CommandWriter,
+    ) -> Option<Outcome> {
         let (title, calls) = match self.area_power_calls(tab_id, on) {
             Ok(found) => found,
             Err(message) => {
@@ -169,26 +189,51 @@ impl Daemon {
         };
         let mut sent = Vec::with_capacity(calls.len());
         for call in &calls {
-            if let Err(e) = writer.call_service_many(&call.domain, call.service, &call.entity_ids).await {
+            if let Err(e) = writer
+                .call_service_many(&call.domain, call.service, &call.entity_ids)
+                .await
+            {
                 return Some(Outcome::Lost(e));
             }
-            sent.push(format!("{}.{} ×{}", call.domain, call.service, call.entity_ids.len()));
+            sent.push(format!(
+                "{}.{} ×{}",
+                call.domain,
+                call.service,
+                call.entity_ids.len()
+            ));
         }
         self.log(
             Level::Info,
-            format!("{title} — all {}: {}", if on { "on" } else { "off" }, sent.join(", ")),
+            format!(
+                "{title} — all {}: {}",
+                if on { "on" } else { "off" },
+                sent.join(", ")
+            ),
             None,
         );
         None
     }
 
-    pub(super) async fn handle_online(&mut self, command: Command, writer: &mut CommandWriter) -> Option<Outcome> {
+    pub(super) async fn handle_online(
+        &mut self,
+        command: Command,
+        writer: &mut CommandWriter,
+    ) -> Option<Outcome> {
         match command {
-            Command::Action { entity_id, action, data } => {
+            Command::Action {
+                entity_id,
+                action,
+                data,
+            } => {
                 match action::resolve(&entity_id, &action, &data) {
                     Ok(resolved) => {
                         if let Err(e) = writer
-                            .call_service(&resolved.domain, &resolved.service, &resolved.entity_id, resolved.data)
+                            .call_service(
+                                &resolved.domain,
+                                &resolved.service,
+                                &resolved.entity_id,
+                                resolved.data,
+                            )
                             .await
                         {
                             return Some(Outcome::Lost(e));
@@ -233,7 +278,6 @@ impl Daemon {
             },
         }
     }
-
 }
 
 #[cfg(test)]
@@ -249,7 +293,11 @@ mod tests {
     use crate::ha::registry::{AreaEntry, EntityEntry, Registry};
 
     fn entity(id: &str, area: &str) -> EntityEntry {
-        EntityEntry { entity_id: id.into(), area_id: Some(area.into()), ..Default::default() }
+        EntityEntry {
+            entity_id: id.into(),
+            area_id: Some(area.into()),
+            ..Default::default()
+        }
     }
 
     fn daemon(entities: Vec<EntityEntry>, states: &[(&str, &str)]) -> Daemon {
@@ -260,13 +308,24 @@ mod tests {
             generation: 0,
             registry: Registry {
                 areas: vec![
-                    AreaEntry { area_id: "kitchen".into(), name: "Kitchen".into(), ..Default::default() },
-                    AreaEntry { area_id: "hall".into(), name: "Hall".into(), ..Default::default() },
+                    AreaEntry {
+                        area_id: "kitchen".into(),
+                        name: "Kitchen".into(),
+                        ..Default::default()
+                    },
+                    AreaEntry {
+                        area_id: "hall".into(),
+                        name: "Hall".into(),
+                        ..Default::default()
+                    },
                 ],
                 devices: Vec::new(),
                 entities: entities.clone(),
             },
-            entities: entities.into_iter().map(|e| (e.entity_id.clone(), e)).collect(),
+            entities: entities
+                .into_iter()
+                .map(|e| (e.entity_id.clone(), e))
+                .collect(),
             connected_at: std::time::Instant::now(),
             registry_stale: false,
             states: states
@@ -311,7 +370,13 @@ mod tests {
         assert_eq!(title, "Kitchen");
         let got: Vec<(&str, &str, Vec<&str>)> = calls
             .iter()
-            .map(|c| (c.domain.as_str(), c.service, c.entity_ids.iter().map(String::as_str).collect()))
+            .map(|c| {
+                (
+                    c.domain.as_str(),
+                    c.service,
+                    c.entity_ids.iter().map(String::as_str).collect(),
+                )
+            })
             .collect();
         assert_eq!(
             got,
@@ -325,13 +390,22 @@ mod tests {
     #[test]
     fn a_hidden_room_or_one_with_nothing_switchable_is_refused() {
         let mut d = daemon(
-            vec![entity("lock.front", "hall"), entity("light.counter", "kitchen")],
+            vec![
+                entity("lock.front", "hall"),
+                entity("light.counter", "kitchen"),
+            ],
             &[("lock.front", "locked"), ("light.counter", "off")],
         );
-        assert!(d.area_power_calls("area:hall", true).unwrap_err().contains("nothing to switch on"));
+        assert!(d
+            .area_power_calls("area:hall", true)
+            .unwrap_err()
+            .contains("nothing to switch on"));
         assert!(d.area_power_calls("area:attic", true).is_err());
 
         d.config.areas.hidden = vec!["kitchen".into()];
-        assert!(d.area_power_calls("area:kitchen", true).is_err(), "a hidden room is not acted on");
+        assert!(
+            d.area_power_calls("area:kitchen", true).is_err(),
+            "a hidden room is not acted on"
+        );
     }
 }

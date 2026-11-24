@@ -20,7 +20,6 @@ controls it supports.
 ## Requirements
 
 - Omarchy 4.0 or newer
-- Rust, to build once at install time
 - `secret-tool` (libsecret) with a running keyring
 
 ## Install
@@ -30,9 +29,28 @@ omarchy plugin add https://github.com/bitshiftxr/atrium.git --enable
 ~/.config/omarchy/plugins/io.github.bitshiftxr.atrium/setup
 ```
 
-`setup` does the build, and installs Rust for you if it is missing. It builds
-under `~/.cache/atrium/` and copies only the finished binary into the plugin
-directory, because the shell reloads on every file event inside that directory.
+`setup` downloads the prebuilt `atriumd` daemon from the GitHub release that
+matches the plugin's version, checks it against the release's `SHA256SUMS`, and
+puts it in `bin/`. Releases carry binaries for x86_64 and aarch64. Running it
+again does nothing if the installed binary already matches.
+
+`omarchy plugin add` has no post-install hook, so `setup` stays a separate step.
+
+`setup` builds the daemon with cargo instead, installing Rust first if it is
+missing, when:
+
+- there is no release for this version, or none for your architecture
+- the download does not match its checksum. `setup` refuses that binary and
+  says so before building
+- you ask for it:
+
+```sh
+~/.config/omarchy/plugins/io.github.bitshiftxr.atrium/setup --from-source
+```
+
+The build happens under `~/.cache/atrium/` and only the finished binary is
+copied into the plugin directory, because the shell reloads on every file event
+inside that directory.
 
 ## Bar position
 
@@ -175,6 +193,30 @@ Two tests can run against a real Home Assistant. They are skipped unless
 entities, states and dashboard config of an instance. Keep that file out of the
 repository; it lists every room and device in a home. The rest of the suite
 needs no instance and no network.
+
+## Cutting a release
+
+1. Bump `"version"` in `manifest.json` (and `daemon/Cargo.toml` to match) and
+   merge that to `main`.
+2. Tag the merge commit with the same version and push the tag:
+
+   ```sh
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+The `Release` workflow refuses a tag that does not match `manifest.json`. It
+builds `atriumd` for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`,
+and attaches both, with `SHA256SUMS`, to the GitHub release for the tag. Until
+that release exists, `setup` for the new version falls back to building from
+source.
+
+To test `setup`'s download path without a release, point `ATRIUM_RELEASE_URL`
+at a directory holding the binaries and a `SHA256SUMS`:
+
+```sh
+ATRIUM_RELEASE_URL=file:///path/to/fake-release ./setup
+```
 
 ## Remove
 

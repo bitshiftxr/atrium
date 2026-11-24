@@ -146,7 +146,10 @@ impl Registry {
         device_area.get(device_id).copied()
     }
 
-    fn bucket<'a>(&'a self, live_ids: &'a [String]) -> (BTreeMap<&'a str, Vec<&'a str>>, Vec<&'a str>) {
+    fn bucket<'a>(
+        &'a self,
+        live_ids: &'a [String],
+    ) -> (BTreeMap<&'a str, Vec<&'a str>>, Vec<&'a str>) {
         let entities = self.entity_index();
         let device_area = self.device_area();
 
@@ -165,7 +168,6 @@ impl Registry {
         }
         (by_area, arealess)
     }
-
 
     fn sort_areas(&self, prefs: &AreaPrefs, ids: &mut Vec<&str>) {
         let rank: HashMap<&str, usize> = prefs
@@ -268,7 +270,7 @@ impl Registry {
                     name: label(&area.name, &area.area_id),
                     glyph: glyph_for(&icon),
                     icon,
-                        entity_count: by_area.get(area_id).map_or(0, Vec::len),
+                    entity_count: by_area.get(area_id).map_or(0, Vec::len),
                     hidden: hidden.contains(area_id),
                 })
             })
@@ -357,15 +359,24 @@ mod tests {
         let prefs = AreaPrefs::default();
         assert!(prefs.order.is_empty());
         assert!(prefs.hidden.is_empty());
-        assert!(!prefs.hide_entities_without_area, "do not silently drop entities");
-        assert!(prefs.hide_empty_areas, "an empty area is noise as a bar tab");
+        assert!(
+            !prefs.hide_entities_without_area,
+            "do not silently drop entities"
+        );
+        assert!(
+            prefs.hide_empty_areas,
+            "an empty area is noise as a bar tab"
+        );
     }
 
     #[test]
     fn areas_appear_with_no_favorites_configured() {
         let reg = fixture();
         let tabs = reg.project_tabs(&all_live(), &AreaPrefs::default(), ident);
-        assert_eq!(area_titles(&tabs), ["Garage", "Kitchen", "Living Room", "Office"]);
+        assert_eq!(
+            area_titles(&tabs),
+            ["Garage", "Kitchen", "Living Room", "Office"]
+        );
     }
 
     #[test]
@@ -412,7 +423,10 @@ mod tests {
             ..Default::default()
         };
         let tabs = reg.project_tabs(&all_live(), &prefs, ident);
-        assert_eq!(area_titles(&tabs), ["Office", "Garage", "Kitchen", "Living Room"]);
+        assert_eq!(
+            area_titles(&tabs),
+            ["Office", "Garage", "Kitchen", "Living Room"]
+        );
     }
 
     #[test]
@@ -446,7 +460,9 @@ mod tests {
         let tabs = reg.project_tabs(&ids, &AreaPrefs::default(), ident);
         let garage = tabs.iter().find(|t| t.title == "Garage").unwrap();
         assert_eq!(garage.entity_ids, ["cover.door"]);
-        assert!(!tabs.iter().any(|t| t.entity_ids.iter().any(|e| e == "automation.nightly")));
+        assert!(!tabs
+            .iter()
+            .any(|t| t.entity_ids.iter().any(|e| e == "automation.nightly")));
     }
 
     #[test]
@@ -507,7 +523,10 @@ mod tests {
         };
         let choices = reg.area_choices(&all_live(), &prefs);
         let names: Vec<&str> = choices.iter().map(|c| c.name.as_str()).collect();
-        assert_eq!(names, ["Garage", "Office", "Guest Room", "Kitchen", "Living Room"]);
+        assert_eq!(
+            names,
+            ["Garage", "Office", "Guest Room", "Kitchen", "Living Room"]
+        );
     }
 
     #[test]
@@ -522,8 +541,10 @@ mod tests {
         let choices = reg.area_choices(&all_live(), &AreaPrefs::default());
         let json = serde_json::to_value(&choices[0]).unwrap();
         for key in ["areaId", "name", "icon", "glyph", "entityCount", "hidden"] {
-            assert!(json.get(key).is_some(), "AreaChoice is missing {key}: {json}");
+            assert!(
+                json.get(key).is_some(),
+                "AreaChoice is missing {key}: {json}"
+            );
         }
     }
-
 }

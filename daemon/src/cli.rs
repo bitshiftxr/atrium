@@ -64,7 +64,12 @@ pub async fn call(target: &str, entity: &str, action: &str, data: Option<&str>) 
         }
     };
     match session
-        .call_service(&resolved.domain, &resolved.service, &resolved.entity_id, resolved.data)
+        .call_service(
+            &resolved.domain,
+            &resolved.service,
+            &resolved.entity_id,
+            resolved.data,
+        )
         .await
     {
         Ok(()) => {
@@ -104,7 +109,10 @@ pub async fn probe(target: &str) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    println!("connected to {} (Home Assistant {})", endpoint.origin, session.ha_version);
+    println!(
+        "connected to {} (Home Assistant {})",
+        endpoint.origin, session.ha_version
+    );
 
     let snapshot = match session.snapshot().await {
         Ok(snapshot) => snapshot,
@@ -134,16 +142,22 @@ pub async fn probe(target: &str) -> ExitCode {
         .and_then(|config| prefs::from_lovelace_config(config, true));
     let (label, area_prefs) = match imported {
         Some(p) => ("imported from your Home Assistant dashboard", p),
-        None => ("Atrium defaults (no generated dashboard to import)", AreaPrefs::default()),
+        None => (
+            "Atrium defaults (no generated dashboard to import)",
+            AreaPrefs::default(),
+        ),
     };
     println!("area preferences: {label}");
 
     let names = display_names(&snapshot);
-    let tabs = snapshot
-        .registry
-        .project_tabs(&live, &area_prefs, |id| names.get(id).cloned().unwrap_or_else(|| id.to_string()));
+    let tabs = snapshot.registry.project_tabs(&live, &area_prefs, |id| {
+        names.get(id).cloned().unwrap_or_else(|| id.to_string())
+    });
 
-    println!("\npanel would show {} tabs, no favorites required:", tabs.len());
+    println!(
+        "\npanel would show {} tabs, no favorites required:",
+        tabs.len()
+    );
     for tab in &tabs {
         println!("  {:<22} {:>3} entities", tab.title, tab.entity_ids.len());
     }
@@ -162,13 +176,13 @@ pub async fn probe(target: &str) -> ExitCode {
         for tab in &tabs {
             println!("\n{}", tab.title);
             for id in &tab.entity_ids {
-                let Some(entity) = states.get(id.as_str()) else { continue };
-                let Some(row) = atriumd::ha::model::row(entity, None, None) else { continue };
-                let controls: Vec<String> = row
-                    .controls
-                    .iter()
-                    .map(|c| format!("{c:?}"))
-                    .collect();
+                let Some(entity) = states.get(id.as_str()) else {
+                    continue;
+                };
+                let Some(row) = atriumd::ha::model::row(entity, None, None) else {
+                    continue;
+                };
+                let controls: Vec<String> = row.controls.iter().map(|c| format!("{c:?}")).collect();
                 println!(
                     "  {:<34} {:<14} {}",
                     row.name.chars().take(34).collect::<String>(),
@@ -181,7 +195,9 @@ pub async fn probe(target: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn display_names(snapshot: &atriumd::ha::client::Snapshot) -> std::collections::HashMap<String, String> {
+fn display_names(
+    snapshot: &atriumd::ha::client::Snapshot,
+) -> std::collections::HashMap<String, String> {
     snapshot
         .states
         .iter()

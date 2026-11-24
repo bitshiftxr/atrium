@@ -24,8 +24,15 @@ pub fn for_sensor(device_class: Option<&str>) -> Option<&'static str> {
         "illuminance" => "mdi:brightness-5",
         "irradiance" => "mdi:sun-wireless",
         "monetary" => "mdi:cash",
-        "nitrogen_dioxide" | "nitrogen_monoxide" | "nitrous_oxide" | "ozone" | "pm1" | "pm10"
-        | "pm25" | "sulphur_dioxide" | "volatile_organic_compounds" => "mdi:molecule",
+        "nitrogen_dioxide"
+        | "nitrogen_monoxide"
+        | "nitrous_oxide"
+        | "ozone"
+        | "pm1"
+        | "pm10"
+        | "pm25"
+        | "sulphur_dioxide"
+        | "volatile_organic_compounds" => "mdi:molecule",
         "ph" => "mdi:ph",
         "power_factor" => "mdi:angle-acute",
         "precipitation" => "mdi:weather-rainy",
@@ -74,7 +81,11 @@ pub fn for_binary_sensor(device_class: Option<&str>, active: bool) -> Option<&'s
 
 pub fn for_switch(device_class: Option<&str>, active: bool) -> Option<&'static str> {
     match device_class? {
-        "outlet" => Some(if active { "mdi:power-plug" } else { "mdi:power-plug-off" }),
+        "outlet" => Some(if active {
+            "mdi:power-plug"
+        } else {
+            "mdi:power-plug-off"
+        }),
         "switch" => Some(if active {
             "mdi:toggle-switch-variant"
         } else {
@@ -117,15 +128,32 @@ mod tests {
 
     #[test]
     fn the_classes_on_a_real_instance_all_resolve() {
-        for class in ["power", "voltage", "current", "energy", "battery", "temperature",
-                      "humidity", "distance", "timestamp", "aqi", "pm25"] {
+        for class in [
+            "power",
+            "voltage",
+            "current",
+            "energy",
+            "battery",
+            "temperature",
+            "humidity",
+            "distance",
+            "timestamp",
+            "aqi",
+            "pm25",
+        ] {
             let icon = for_sensor(Some(class)).unwrap_or_else(|| panic!("{class} unmapped"));
-            assert!(icons::glyph(icon).is_some(), "{class} -> {icon} is not in the font");
+            assert!(
+                icons::glyph(icon).is_some(),
+                "{class} -> {icon} is not in the font"
+            );
         }
         for class in ["connectivity", "occupancy", "problem"] {
             for active in [true, false] {
                 let icon = for_binary_sensor(Some(class), active).unwrap();
-                assert!(icons::glyph(icon).is_some(), "{class} -> {icon} is not in the font");
+                assert!(
+                    icons::glyph(icon).is_some(),
+                    "{class} -> {icon} is not in the font"
+                );
             }
         }
         for active in [true, false] {
@@ -139,36 +167,110 @@ mod tests {
 
     #[test]
     fn every_mapped_icon_exists_in_the_font() {
-        let classes = ["apparent_power", "aqi", "atmospheric_pressure", "battery",
-            "carbon_dioxide", "carbon_monoxide", "current", "data_rate", "data_size", "date",
-            "distance", "duration", "energy", "energy_storage", "frequency", "gas", "humidity",
-            "illuminance", "irradiance", "monetary", "nitrogen_dioxide", "ozone", "ph", "pm1",
-            "pm10", "pm25", "power", "power_factor", "precipitation", "precipitation_intensity",
-            "pressure", "reactive_power", "signal_strength", "sound_pressure", "speed",
-            "sulphur_dioxide", "temperature", "timestamp", "voltage", "volatile_organic_compounds",
-            "water", "weight", "wind_speed", "moisture"];
+        let classes = [
+            "apparent_power",
+            "aqi",
+            "atmospheric_pressure",
+            "battery",
+            "carbon_dioxide",
+            "carbon_monoxide",
+            "current",
+            "data_rate",
+            "data_size",
+            "date",
+            "distance",
+            "duration",
+            "energy",
+            "energy_storage",
+            "frequency",
+            "gas",
+            "humidity",
+            "illuminance",
+            "irradiance",
+            "monetary",
+            "nitrogen_dioxide",
+            "ozone",
+            "ph",
+            "pm1",
+            "pm10",
+            "pm25",
+            "power",
+            "power_factor",
+            "precipitation",
+            "precipitation_intensity",
+            "pressure",
+            "reactive_power",
+            "signal_strength",
+            "sound_pressure",
+            "speed",
+            "sulphur_dioxide",
+            "temperature",
+            "timestamp",
+            "voltage",
+            "volatile_organic_compounds",
+            "water",
+            "weight",
+            "wind_speed",
+            "moisture",
+        ];
         for class in classes {
             if let Some(icon) = for_sensor(Some(class)) {
-                assert!(icons::glyph(icon).is_some(), "sensor/{class} -> {icon} missing");
+                assert!(
+                    icons::glyph(icon).is_some(),
+                    "sensor/{class} -> {icon} missing"
+                );
             }
         }
-        let binary = ["battery", "battery_charging", "carbon_monoxide", "cold", "connectivity",
-            "door", "garage_door", "gas", "heat", "light", "lock", "moisture", "motion",
-            "occupancy", "opening", "plug", "power", "presence", "problem", "running", "safety",
-            "smoke", "sound", "tamper", "update", "vibration", "window"];
+        let binary = [
+            "battery",
+            "battery_charging",
+            "carbon_monoxide",
+            "cold",
+            "connectivity",
+            "door",
+            "garage_door",
+            "gas",
+            "heat",
+            "light",
+            "lock",
+            "moisture",
+            "motion",
+            "occupancy",
+            "opening",
+            "plug",
+            "power",
+            "presence",
+            "problem",
+            "running",
+            "safety",
+            "smoke",
+            "sound",
+            "tamper",
+            "update",
+            "vibration",
+            "window",
+        ];
         for class in binary {
             for active in [true, false] {
                 if let Some(icon) = for_binary_sensor(Some(class), active) {
-                    assert!(icons::glyph(icon).is_some(), "binary_sensor/{class} -> {icon} missing");
+                    assert!(
+                        icons::glyph(icon).is_some(),
+                        "binary_sensor/{class} -> {icon} missing"
+                    );
                 }
             }
         }
-        let covers = ["awning", "blind", "curtain", "damper", "door", "garage", "gate", "shade",
-                      "shutter", "window"];
+        let covers = [
+            "awning", "blind", "curtain", "damper", "door", "garage", "gate", "shade", "shutter",
+            "window",
+        ];
         for class in covers {
             for active in [true, false] {
                 let icon = for_cover(Some(class), active).unwrap();
-                assert!(icons::glyph(icon).is_some(), "cover/{class} -> {icon} missing");
+                assert!(
+                    icons::glyph(icon).is_some(),
+                    "cover/{class} -> {icon} missing"
+                );
             }
         }
     }

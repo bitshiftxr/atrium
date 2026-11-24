@@ -86,8 +86,16 @@ mod tests {
     #[test]
     fn an_import_keeps_the_users_own_empty_rooms_choice() {
         let config = json!({ "strategy": { "type": "original-states" } });
-        assert!(!from_lovelace_config(&config, false).unwrap().hide_empty_areas);
-        assert!(from_lovelace_config(&config, true).unwrap().hide_empty_areas);
+        assert!(
+            !from_lovelace_config(&config, false)
+                .unwrap()
+                .hide_empty_areas
+        );
+        assert!(
+            from_lovelace_config(&config, true)
+                .unwrap()
+                .hide_empty_areas
+        );
     }
 
     #[test]
