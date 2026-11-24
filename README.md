@@ -88,9 +88,10 @@ The settings window has five panes:
 | Sensors and everything else | Current state |
 
 The switch beside the room name turns the room's lights, switches, fans,
-humidifiers and toggle helpers on or off together. It shows on when any of them
-is on, so switching it off turns them all off, and switching it on turns them
-all on, as Home Assistant's own room toggle does. It acts only on the devices
+humidifiers and toggle helpers on or off together. It shows on only when all of
+them are on, and switching it off then turns them all off. Otherwise, including
+when some are on and some off, it shows off, and switching it on turns them all
+on. It follows the devices as they change. It acts only on the devices
 the panel shows for that room, skips anything unavailable, and never touches
 locks, covers, alarm panels, thermostats or media players. Rooms with nothing it
 could switch have no switch.

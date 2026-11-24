@@ -231,13 +231,16 @@ QtObject {
     return out
   }
 
-  // On when anything switchable is on, as Home Assistant's own room toggle.
-  function areaAnyOn(tabId) {
+  // On only when every device the room switch acts on is on. A mixed room
+  // reads off, so one click always finishes the job: on turns everything off,
+  // off (or mixed) turns everything on.
+  function areaAllOn(tabId) {
     var list = areaPowerRows(tabId)
+    if (list.length === 0) return false
     for (var i = 0; i < list.length; i++) {
-      if (list[i].active) return true
+      if (!list[i].active) return false
     }
-    return false
+    return true
   }
 
   readonly property bool currentTabSwitchable: {
@@ -245,9 +248,9 @@ QtObject {
     return areaPowerRows(currentTabId).length > 0
   }
 
-  readonly property bool currentTabAnyOn: {
+  readonly property bool currentTabAllOn: {
     rowsRevision
-    return areaAnyOn(currentTabId)
+    return areaAllOn(currentTabId)
   }
 
   function setAreaPower(tabId, on) {
@@ -262,7 +265,7 @@ QtObject {
   }
 
   function toggleArea(tabId) {
-    setAreaPower(tabId, !areaAnyOn(tabId))
+    setAreaPower(tabId, !areaAllOn(tabId))
   }
 
   function tabNamed(name) {
@@ -524,7 +527,7 @@ QtObject {
       var tab = root.tabNamed(area)
       if (!tab) return "unknown room " + area
       if (root.areaPowerRows(tab.id).length === 0) return tab.title + " has nothing to switch"
-      var on = !root.areaAnyOn(tab.id)
+      var on = !root.areaAllOn(tab.id)
       root.setAreaPower(tab.id, on)
       return tab.title + " " + (on ? "on" : "off")
     }

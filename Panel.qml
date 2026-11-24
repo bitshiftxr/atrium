@@ -27,7 +27,7 @@ Panel {
   readonly property real pad: Style.spacing.rowPaddingX
   readonly property bool currentPinned: service ? service.isPinnedTab(activeTab) : false
   readonly property bool roomSwitchable: service ? service.currentTabSwitchable : false
-  readonly property bool roomAnyOn: service ? service.currentTabAnyOn : false
+  readonly property bool roomAllOn: service ? service.currentTabAllOn : false
 
   function toggleRoom() {
     if (service && roomSwitchable) service.toggleArea(service.currentTabId)
@@ -239,8 +239,42 @@ Panel {
             anchors.rightMargin: root.pad
             anchors.verticalCenter: roomPicker.verticalCenter
             visible: root.roomSwitchable
-            checked: root.roomAnyOn
+            checked: root.roomAllOn
             onToggled: root.toggleRoom()
+
+            // The device rows' switch size (EntityRow.qml), rather than the
+            // full-height form control ToggleSwitch defaults to.
+            trackWidth: Style.space(26)
+            trackHeight: Style.space(14)
+            knobSize: Style.space(10)
+            knobInset: 1
+
+            // ToggleSwitch paints its on state from the theme's
+            // [controls] selected-color, which a theme may set to a fixed
+            // colour that no property here can reach. While on, this covers
+            // the track and knob with the device rows' own on look: an accent
+            // outline and an accent knob on the panel surface. Off, hover,
+            // size and clicks stay the standard switch's; this draws nothing
+            // and takes no input.
+            Rectangle {
+              visible: roomSwitch.checked
+              anchors.centerIn: parent
+              width: roomSwitch.trackWidth
+              height: roomSwitch.trackHeight
+              radius: roomSwitch.rounded ? height / 2 : 0
+              color: Color.popups.background
+              border.width: 1
+              border.color: Color.accent
+
+              Rectangle {
+                width: roomSwitch.knobSize
+                height: roomSwitch.knobSize
+                radius: roomSwitch.rounded ? height / 2 : 0
+                anchors.verticalCenter: parent.verticalCenter
+                x: roomSwitch.mirrored ? roomSwitch.knobInset : parent.width - width - roomSwitch.knobInset
+                color: Color.accent
+              }
+            }
           }
 
           // Dropdown assigns to its own `value` when an item is picked, which
