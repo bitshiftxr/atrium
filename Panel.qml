@@ -241,11 +241,33 @@ Panel {
             visible: root.roomSwitchable
             checked: root.roomAllOn
             onToggled: root.toggleRoom()
-            // ToggleSwitch draws its on state from `foreground` (the theme's
-            // selected-color, foreground by default), so handing it the accent
-            // only while on gives the device rows' on colour and leaves off
-            // exactly as standard.
-            foreground: checked ? Color.accent : Color.foreground
+
+            // ToggleSwitch paints its on state from the theme's
+            // [controls] selected-color, which a theme may set to a fixed
+            // colour that no property here can reach. While on, this covers
+            // the track and knob with the device rows' own on look: an accent
+            // outline and an accent knob on the panel surface. Off, hover,
+            // size and clicks stay the standard switch's; this draws nothing
+            // and takes no input.
+            Rectangle {
+              visible: roomSwitch.checked
+              anchors.centerIn: parent
+              width: roomSwitch.trackWidth
+              height: roomSwitch.trackHeight
+              radius: roomSwitch.rounded ? height / 2 : 0
+              color: Color.popups.background
+              border.width: 1
+              border.color: Color.accent
+
+              Rectangle {
+                width: roomSwitch.knobSize
+                height: roomSwitch.knobSize
+                radius: roomSwitch.rounded ? height / 2 : 0
+                anchors.verticalCenter: parent.verticalCenter
+                x: roomSwitch.mirrored ? roomSwitch.knobInset : parent.width - width - roomSwitch.knobInset
+                color: Color.accent
+              }
+            }
           }
 
           // Dropdown assigns to its own `value` when an item is picked, which
