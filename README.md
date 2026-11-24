@@ -26,31 +26,23 @@ controls it supports.
 
 ```sh
 omarchy plugin add https://github.com/bitshiftxr/atrium.git --enable
-~/.config/omarchy/plugins/io.github.bitshiftxr.atrium/setup
 ```
 
-`setup` downloads the prebuilt `atriumd` daemon from the GitHub release that
-matches the plugin's version, checks it against the release's `SHA256SUMS`, and
-puts it in `bin/`. Releases carry binaries for x86_64 and aarch64. Running it
-again does nothing if the installed binary already matches.
+That is the whole install. The plugin's QML talks to a small daemon, `atriumd`,
+which is not committed to the repository. The first time the panel starts,
+`bin/atriumd-launcher` downloads the prebuilt `atriumd` for your machine
+(x86_64 or aarch64) from this repository's GitHub releases. It checks the
+download's size and SHA256 against [`daemon-release.env`](daemon-release.env),
+which is committed alongside the plugin, and refuses to run anything that does
+not match. The verified binary is kept in
+`${XDG_DATA_HOME:-~/.local/share}/atrium/<release>/`, outside the plugin folder,
+and is checked against the pin again on every start, so later starts work
+offline. If the download fails or does not match, the panel says why and keeps
+retrying.
 
-`omarchy plugin add` has no post-install hook, so `setup` stays a separate step.
-
-`setup` builds the daemon with cargo instead, installing Rust first if it is
-missing, when:
-
-- there is no release for this version, or none for your architecture
-- the download does not match its checksum. `setup` refuses that binary and
-  says so before building
-- you ask for it:
-
-```sh
-~/.config/omarchy/plugins/io.github.bitshiftxr.atrium/setup --from-source
-```
-
-The build happens under `~/.cache/atrium/` and only the finished binary is
-copied into the plugin directory, because the shell reloads on every file event
-inside that directory.
+`omarchy plugin update` brings in a new `daemon-release.env` along with the
+rest of the plugin, and the next start downloads the release it names. Older
+releases' folders under `~/.local/share/atrium/` can be deleted.
 
 ## Bar position
 
@@ -152,11 +144,29 @@ include camera tokens, media links or location.
 
 ## Development
 
+The daemon is Rust, in `daemon/`. Building it needs Rust (the `rust` package
+on Omarchy):
+
 ```sh
 cd daemon
 cargo test
 cargo clippy --all-targets
 ```
+
+To run the panel against a daemon you built, build it outside the plugin
+folder, since the shell reloads on every file event inside it:
+
+```sh
+cargo build --release --locked --manifest-path daemon/Cargo.toml \
+  --target-dir ~/.cache/atrium/target
+```
+
+Then start the shell with
+`ATRIUM_DAEMON=~/.cache/atrium/target/release/atriumd` in its environment. The
+panel runs that binary directly and skips the launcher.
+
+To check the launcher on its own, `bin/atriumd-launcher --fetch` downloads and
+verifies the pinned daemon if needed and prints its path.
 
 ```sh
 omarchy plugin validate .
@@ -171,16 +181,17 @@ diagnostics.
 ./test-daemon-failure
 ```
 
-Runs `Service.qml` under quickshell against four daemons — one missing, one that
-exits on startup, the real one, and one that appears twelve seconds in — and
-checks that the panel reports the failure, keeps reporting it, and clears once
-the daemon works. It needs a Wayland session and takes about 90 seconds, so it
-is not part of `cargo test`.
+Runs `Service.qml` under quickshell against five daemons — one missing, one that
+exits on startup, the launcher refusing a download whose hash does not match
+its pin, the real one through the launcher, and one that appears twelve seconds
+in — and checks that the panel reports the failure and its cause, keeps
+reporting it, and clears once the daemon works. It needs a Wayland session and
+the network, and takes about two minutes, so it is not part of `cargo test`.
 
 To see what the panel would draw without starting the shell:
 
 ```sh
-ATRIUM_TOKEN='<your token>' ./bin/atriumd probe https://homeassistant.local:8123 --rows
+ATRIUM_TOKEN='<your token>' bin/atriumd-launcher probe https://homeassistant.local:8123 --rows
 ```
 
 `atriumd call <url> <entity> <action> [json]` resolves one action the way the
@@ -196,6 +207,11 @@ needs no instance and no network.
 
 ## Cutting a release
 
+The plugin's version and the daemon it runs are tied together only by
+`daemon-release.env`. It always names a release whose assets are already
+published, and CI downloads and verifies them on every pull request and push to
+`main`. A new daemon reaches users in three steps:
+
 1. Bump `"version"` in `manifest.json` (and `daemon/Cargo.toml` to match) and
    merge that to `main`.
 2. Tag the merge commit with the same version and push the tag:
@@ -205,18 +221,24 @@ needs no instance and no network.
    git push origin v0.2.0
    ```
 
-The `Release` workflow refuses a tag that does not match `manifest.json`. It
-builds `atriumd` for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`,
-and attaches both, with `SHA256SUMS`, to the GitHub release for the tag. Until
-that release exists, `setup` for the new version falls back to building from
-source.
+   The `Release` workflow refuses a tag that does not match `manifest.json`. It
+   builds `atriumd` for `x86_64-unknown-linux-gnu` and
+   `aarch64-unknown-linux-gnu`, and attaches both, with `SHA256SUMS`, to the
+   GitHub release for the tag.
+3. The same workflow then downloads the published assets, writes their sizes
+   and SHA256s into `daemon-release.env`, checks the result with the launcher,
+   and opens a pull request named "Pin atriumd v0.2.0". Merge it. Until then,
+   `main` keeps running the previous release's daemon.
 
-To test `setup`'s download path without a release, point `ATRIUM_RELEASE_URL`
-at a directory holding the binaries and a `SHA256SUMS`:
+Ask the marketplace to pick up the new version only after step 3 has merged.
+If the panel and the daemon change together in a way the old daemon cannot
+serve, keep the panel change on its branch until the pin PR is ready, so `main`
+never pairs new QML with an old daemon.
 
-```sh
-ATRIUM_RELEASE_URL=file:///path/to/fake-release ./setup
-```
+The pin PR is opened with the workflow's own token, which needs "Allow GitHub
+Actions to create and approve pull requests" turned on in the repository's
+Actions settings. GitHub does not run CI on a pull request opened that way;
+close and reopen it to run CI.
 
 ## Remove
 

@@ -18,7 +18,7 @@ from pathlib import Path
 try:
     from fontTools.ttLib import TTFont
 except ImportError:
-    sys.exit("fontTools is required: pip install fonttools")
+    sys.exit("fontTools is required (the python-fonttools package)")
 
 OUT = Path(__file__).resolve().parent.parent / "daemon" / "src" / "ha" / "icons.rs"
 
