@@ -1,6 +1,7 @@
 use serde_json::{json, Map, Value};
 
 use crate::ha::filter::domain_of;
+use crate::ha::model::is_unavailable;
 use crate::ha::text::valid_entity_id;
 
 // Wide enough for either unit and any thermostat, narrow enough that a bad
@@ -189,13 +190,14 @@ pub struct BulkCall {
 
 /// Turns the entities a tab shows into one call per domain. `entities` is the
 /// tab's own list paired with each entity's current state, so only what the
-/// panel draws is ever touched. Unavailable entities are skipped: Home
-/// Assistant cannot reach them, and one failure would fail the whole call.
+/// panel draws is ever touched. Unavailable and unknown entities are skipped,
+/// by the same rule that dims their rows: Home Assistant cannot vouch for them,
+/// and one failure would fail the whole call.
 pub fn area_power<'a>(entities: impl IntoIterator<Item = (&'a str, &'a str)>, on: bool) -> Vec<BulkCall> {
     let service = if on { "turn_on" } else { "turn_off" };
     let mut by_domain: std::collections::BTreeMap<&str, Vec<String>> = std::collections::BTreeMap::new();
     for (entity_id, state) in entities {
-        if !valid_entity_id(entity_id) || !is_area_power_domain(entity_id) || state == "unavailable" {
+        if !valid_entity_id(entity_id) || !is_area_power_domain(entity_id) || is_unavailable(state) {
             continue;
         }
         let ids = by_domain.entry(domain_of(entity_id)).or_default();
@@ -408,8 +410,20 @@ mod tests {
         );
         assert_eq!(
             ids(&calls),
-            vec![("light", "turn_off", vec!["light.desk"]), ("switch", "turn_off", vec!["switch.unknown"])]
+            vec![("light", "turn_off", vec!["light.desk"])]
         );
         assert!(area_power(std::iter::empty::<(&str, &str)>(), false).is_empty());
+    }
+
+    #[test]
+    fn area_power_skips_exactly_the_rows_the_panel_shows_as_unavailable() {
+        use crate::ha::model;
+        let states = ["on", "off", "unknown", "unavailable"];
+        for state in states {
+            let row = model::row(&json!({ "entity_id": "light.desk", "state": state }), None, None).unwrap();
+            let picked = !area_power([("light.desk", state)], true).is_empty();
+            assert_eq!(picked, !row.unavailable, "panel and daemon disagree on state {state:?}");
+        }
+        assert!(area_power([("switch.kettle", "unknown")], false).is_empty());
     }
 }
