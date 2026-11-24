@@ -27,7 +27,7 @@ Panel {
   readonly property real pad: Style.spacing.rowPaddingX
   readonly property bool currentPinned: service ? service.isPinnedTab(activeTab) : false
   readonly property bool roomSwitchable: service ? service.currentTabSwitchable : false
-  readonly property bool roomAnyOn: service ? service.currentTabAnyOn : false
+  readonly property bool roomAllOn: service ? service.currentTabAllOn : false
 
   function toggleRoom() {
     if (service && roomSwitchable) service.toggleArea(service.currentTabId)
@@ -239,8 +239,13 @@ Panel {
             anchors.rightMargin: root.pad
             anchors.verticalCenter: roomPicker.verticalCenter
             visible: root.roomSwitchable
-            checked: root.roomAnyOn
+            checked: root.roomAllOn
             onToggled: root.toggleRoom()
+            // ToggleSwitch draws its on state from `foreground` (the theme's
+            // selected-color, foreground by default), so handing it the accent
+            // only while on gives the device rows' on colour and leaves off
+            // exactly as standard.
+            foreground: checked ? Color.accent : Color.foreground
           }
 
           // Dropdown assigns to its own `value` when an item is picked, which
