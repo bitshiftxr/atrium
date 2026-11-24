@@ -2,7 +2,6 @@ mod cli;
 
 use std::process::ExitCode;
 
-
 const USAGE: &str = "\
 atriumd — Home Assistant bridge for the Atrium Omarchy panel
 
@@ -54,4 +53,3 @@ async fn main() -> ExitCode {
         }
     }
 }
-

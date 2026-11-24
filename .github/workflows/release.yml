@@ -1,0 +1,89 @@
+name: Release
+
+# Builds atriumd for each architecture and attaches it to the GitHub release
+# for the pushed tag, along with SHA256SUMS. `setup` downloads from here.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches manifest.json
+        run: |
+          manifest=$(jq -r .version manifest.json)
+          if [[ ${GITHUB_REF_NAME} != "v${manifest}" ]]; then
+            echo "::error file=manifest.json::tag ${GITHUB_REF_NAME} does not match manifest.json version ${manifest}; expected v${manifest}"
+            exit 1
+          fi
+
+  build:
+    needs: version
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --release --locked --manifest-path daemon/Cargo.toml --target "${{ matrix.target }}"
+      # TLS is rustls and certificates come from files, so the binary should
+      # need nothing beyond glibc. Fail if a dependency starts linking
+      # something else (openssl, dbus), because Arch may not have that version.
+      - name: Check linked libraries
+        run: |
+          bin="daemon/target/${{ matrix.target }}/release/atriumd"
+          ldd "$bin"
+          unexpected=$(ldd "$bin" | awk '{print $1}' | grep -vE '^(linux-vdso|linux-gate)\.so|^/?.*ld-linux.*\.so|^lib(c|m|gcc_s)\.so' || true)
+          if [[ -n $unexpected ]]; then
+            echo "::error::atriumd links libraries beyond glibc: $unexpected"
+            exit 1
+          fi
+          echo "glibc required: $(objdump -T "$bin" | grep -oE 'GLIBC_[0-9.]+' | sort -Vu | tail -1)"
+      - name: Stage
+        run: |
+          mkdir dist
+          cp "daemon/target/${{ matrix.target }}/release/atriumd" "dist/atriumd-${{ matrix.target }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atriumd-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: atriumd-*
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum atriumd-* > SHA256SUMS
+          cat SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+          fi

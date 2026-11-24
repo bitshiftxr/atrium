@@ -56,7 +56,9 @@ impl std::fmt::Display for Error {
             Self::Timeout(what) => write!(f, "Home Assistant did not answer in time ({what})"),
             Self::Closed => write!(f, "the connection closed"),
             Self::Protocol(m) => write!(f, "unexpected reply from Home Assistant: {m}"),
-            Self::Server { code, message } => write!(f, "Home Assistant refused the request ({code}): {message}"),
+            Self::Server { code, message } => {
+                write!(f, "Home Assistant refused the request ({code}): {message}")
+            }
         }
     }
 }
@@ -114,7 +116,9 @@ impl Session {
     }
 
     async fn authenticate(&mut self, token: &str) -> Result<(), Error> {
-        let hello = self.read_message(COMMAND_TIMEOUT, "waiting for the auth prompt").await?;
+        let hello = self
+            .read_message(COMMAND_TIMEOUT, "waiting for the auth prompt")
+            .await?;
         match hello.get("type").and_then(Value::as_str) {
             Some("auth_required") => {}
             Some("auth_ok") => {
@@ -129,7 +133,8 @@ impl Session {
             }
         }
 
-        self.send(json!({ "type": "auth", "access_token": token })).await?;
+        self.send(json!({ "type": "auth", "access_token": token }))
+            .await?;
         let reply = self.read_message(COMMAND_TIMEOUT, "authenticating").await?;
         match reply.get("type").and_then(Value::as_str) {
             Some("auth_ok") => {
@@ -173,14 +178,21 @@ impl Session {
                     return serde_json::from_str(&text)
                         .map_err(|e| Error::Protocol(format!("malformed JSON: {e}")))
                 }
-                Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Binary(_) | Message::Frame(_))) => continue,
+                Some(Ok(
+                    Message::Ping(_) | Message::Pong(_) | Message::Binary(_) | Message::Frame(_),
+                )) => continue,
                 Some(Ok(Message::Close(_))) | None => return Err(Error::Closed),
                 Some(Err(e)) => return Err(Error::Connect(e.to_string())),
             }
         }
     }
 
-    async fn request(&mut self, mut command: Value, budget: Duration, what: &'static str) -> Result<Value, Error> {
+    async fn request(
+        &mut self,
+        mut command: Value,
+        budget: Duration,
+        what: &'static str,
+    ) -> Result<Value, Error> {
         let id = self.next_id;
         self.next_id += 1;
         command["id"] = json!(id);
@@ -224,7 +236,11 @@ impl Session {
         let entities = self.list("config/entity_registry/list").await?;
 
         let states = self
-            .request(json!({ "type": "get_states" }), SNAPSHOT_TIMEOUT, "fetching states")
+            .request(
+                json!({ "type": "get_states" }),
+                SNAPSHOT_TIMEOUT,
+                "fetching states",
+            )
             .await?;
         let states = states.as_array().cloned().unwrap_or_default();
 
@@ -239,9 +255,9 @@ impl Session {
     }
 
     async fn list(&mut self, kind: &'static str) -> Result<Value, Error> {
-        self.request(json!({ "type": kind }), SNAPSHOT_TIMEOUT, kind).await
+        self.request(json!({ "type": kind }), SNAPSHOT_TIMEOUT, kind)
+            .await
     }
-
 
     pub async fn lovelace_config(&mut self) -> Option<Value> {
         self.request(
@@ -289,7 +305,6 @@ impl Session {
         .await
         .map(|_| ())
     }
-
 }
 
 fn version_of(message: &Value) -> String {
@@ -333,7 +348,12 @@ impl Session {
     // cannot be borrowed by both a next_event() and an outgoing command in the
     // same select!.
     pub fn into_parts(self) -> (CommandWriter, EventReader) {
-        let Self { stream, next_id, pending, .. } = self;
+        let Self {
+            stream,
+            next_id,
+            pending,
+            ..
+        } = self;
         let (sink, stream) = stream.split();
         (
             CommandWriter { sink, next_id },
@@ -353,7 +373,9 @@ impl EventReader {
                     return serde_json::from_str(&text)
                         .map_err(|e| Error::Protocol(format!("malformed JSON: {e}")))
                 }
-                Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Binary(_) | Message::Frame(_))) => continue,
+                Some(Ok(
+                    Message::Ping(_) | Message::Pong(_) | Message::Binary(_) | Message::Frame(_),
+                )) => continue,
                 Some(Ok(Message::Close(_))) | None => return Err(Error::Closed),
                 Some(Err(e)) => return Err(Error::Connect(e.to_string())),
             }
@@ -369,10 +391,13 @@ impl CommandWriter {
     }
 
     async fn send(&mut self, value: Value) -> Result<(), Error> {
-        tokio::time::timeout(SEND_TIMEOUT, self.sink.send(Message::Text(value.to_string())))
-            .await
-            .map_err(|_| Error::Timeout("sending"))?
-            .map_err(|e| Error::Connect(e.to_string()))
+        tokio::time::timeout(
+            SEND_TIMEOUT,
+            self.sink.send(Message::Text(value.to_string())),
+        )
+        .await
+        .map_err(|_| Error::Timeout("sending"))?
+        .map_err(|e| Error::Connect(e.to_string()))
     }
 
     pub async fn call_service(
@@ -382,17 +407,30 @@ impl CommandWriter {
         entity_id: &str,
         data: Value,
     ) -> Result<u64, Error> {
-        self.call_service_on(domain, service, json!(entity_id), data).await
+        self.call_service_on(domain, service, json!(entity_id), data)
+            .await
     }
 
     /// One call for several entities of the same domain. Home Assistant takes a
     /// list as the target, so a room switch costs one frame per domain rather
     /// than one per device.
-    pub async fn call_service_many(&mut self, domain: &str, service: &str, entity_ids: &[String]) -> Result<u64, Error> {
-        self.call_service_on(domain, service, json!(entity_ids), json!({})).await
+    pub async fn call_service_many(
+        &mut self,
+        domain: &str,
+        service: &str,
+        entity_ids: &[String],
+    ) -> Result<u64, Error> {
+        self.call_service_on(domain, service, json!(entity_ids), json!({}))
+            .await
     }
 
-    async fn call_service_on(&mut self, domain: &str, service: &str, target: Value, data: Value) -> Result<u64, Error> {
+    async fn call_service_on(
+        &mut self,
+        domain: &str,
+        service: &str,
+        target: Value,
+        data: Value,
+    ) -> Result<u64, Error> {
         let mut service_data = match data {
             Value::Object(map) => map,
             _ => serde_json::Map::new(),

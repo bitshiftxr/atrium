@@ -118,7 +118,10 @@ fn light_controls(entity: &Value) -> Vec<Control> {
     if modes.contains(&"color_temp") {
         controls.push(Control::ColorTemp);
     }
-    if modes.iter().any(|m| matches!(*m, "hs" | "rgb" | "rgbw" | "rgbww" | "xy")) {
+    if modes
+        .iter()
+        .any(|m| matches!(*m, "hs" | "rgb" | "rgbw" | "rgbww" | "xy"))
+    {
         controls.push(Control::Color);
     }
     controls
@@ -130,10 +133,10 @@ fn cover_controls(bits: u64) -> Vec<Control> {
     if has(bits, OPEN) || has(bits, CLOSE) {
         controls.push(Control::OpenClose);
     }
-    controls.extend(from_features(bits, &[
-        (STOP, Control::Stop),
-        (SET_POSITION, Control::Position),
-    ]));
+    controls.extend(from_features(
+        bits,
+        &[(STOP, Control::Stop), (SET_POSITION, Control::Position)],
+    ));
     controls
 }
 
@@ -152,12 +155,15 @@ fn media_controls(bits: u64) -> Vec<Control> {
 fn climate_controls(bits: u64) -> Vec<Control> {
     use features::climate::*;
     let mut controls = vec![Control::HvacMode];
-    controls.extend(from_features(bits, &[
-        (TARGET_TEMPERATURE, Control::Temperature),
-        (TARGET_TEMPERATURE_RANGE, Control::TemperatureRange),
-        (FAN_MODE, Control::FanMode),
-        (PRESET_MODE, Control::PresetMode),
-    ]));
+    controls.extend(from_features(
+        bits,
+        &[
+            (TARGET_TEMPERATURE, Control::Temperature),
+            (TARGET_TEMPERATURE_RANGE, Control::TemperatureRange),
+            (FAN_MODE, Control::FanMode),
+            (PRESET_MODE, Control::PresetMode),
+        ],
+    ));
     controls
 }
 
@@ -172,7 +178,10 @@ pub fn capabilities(entity: &Value) -> Vec<Control> {
         "switch" | "input_boolean" | "humidifier" | "siren" | "remote" => vec![Control::Toggle],
         "fan" => {
             let mut c = vec![Control::Toggle];
-            c.extend(from_features(bits, &[(features::fan::SET_SPEED, Control::FanSpeed)]));
+            c.extend(from_features(
+                bits,
+                &[(features::fan::SET_SPEED, Control::FanSpeed)],
+            ));
             c
         }
         "lock" => vec![Control::Lock],
@@ -194,14 +203,23 @@ fn needed_attributes(controls: &[Control], entity: &Value) -> serde_json::Map<St
     for control in controls {
         keys.extend(match control {
             Control::Brightness => &["brightness"][..],
-            Control::ColorTemp => &["color_temp_kelvin", "min_color_temp_kelvin", "max_color_temp_kelvin"],
+            Control::ColorTemp => &[
+                "color_temp_kelvin",
+                "min_color_temp_kelvin",
+                "max_color_temp_kelvin",
+            ],
             Control::Color => &["hs_color", "rgb_color"],
             Control::Position => &["current_position"],
             Control::Transport => &["media_title", "media_artist"],
             Control::Volume => &["volume_level", "is_volume_muted"],
             Control::HvacMode => &["hvac_modes", "hvac_action", "current_temperature"],
             Control::Temperature => &["temperature", "min_temp", "max_temp", "target_temp_step"],
-            Control::TemperatureRange => &["target_temp_low", "target_temp_high", "min_temp", "max_temp"],
+            Control::TemperatureRange => &[
+                "target_temp_low",
+                "target_temp_high",
+                "min_temp",
+                "max_temp",
+            ],
             Control::FanMode => &["fan_mode", "fan_modes"],
             Control::PresetMode => &["preset_mode", "preset_modes"],
             Control::FanSpeed => &["percentage", "percentage_step"],
@@ -236,7 +254,9 @@ fn display_state(entity: &Value, domain: &str, state: &str) -> String {
         _ => {
             let mut chars = state.chars();
             match chars.next() {
-                Some(first) => first.to_uppercase().collect::<String>() + &chars.as_str().replace('_', " "),
+                Some(first) => {
+                    first.to_uppercase().collect::<String>() + &chars.as_str().replace('_', " ")
+                }
                 None => String::new(),
             }
         }
@@ -294,10 +314,18 @@ pub fn is_unavailable(state: &str) -> bool {
     matches!(state, "unavailable" | "unknown")
 }
 
-pub fn row(entity: &Value, registry_name: Option<&str>, registry_icon: Option<&str>) -> Option<Row> {
+pub fn row(
+    entity: &Value,
+    registry_name: Option<&str>,
+    registry_icon: Option<&str>,
+) -> Option<Row> {
     let entity_id = entity.get("entity_id")?.as_str()?.to_string();
     let domain = domain_of(&entity_id).to_string();
-    let state = entity.get("state").and_then(Value::as_str).unwrap_or("unknown").to_string();
+    let state = entity
+        .get("state")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown")
+        .to_string();
     let active = is_active(&domain, &state);
     let unavailable = is_unavailable(&state);
 
@@ -364,25 +392,41 @@ mod tests {
 
     #[test]
     fn an_onoff_only_light_offers_no_brightness() {
-        let e = entity("light.porch", "off", json!({ "supported_color_modes": ["onoff"] }));
+        let e = entity(
+            "light.porch",
+            "off",
+            json!({ "supported_color_modes": ["onoff"] }),
+        );
         let controls = capabilities(&e);
         assert_eq!(controls, vec![Control::Toggle]);
     }
 
     #[test]
     fn media_player_features_are_read_from_the_bitmask() {
-        let e = entity("media_player.tv", "playing", json!({ "supported_features": 16384 | 4 }));
+        let e = entity(
+            "media_player.tv",
+            "playing",
+            json!({ "supported_features": 16384 | 4 }),
+        );
         let controls = capabilities(&e);
         assert!(controls.contains(&Control::Transport));
         assert!(controls.contains(&Control::Volume));
 
-        let bare = entity("media_player.dumb", "idle", json!({ "supported_features": 0 }));
+        let bare = entity(
+            "media_player.dumb",
+            "idle",
+            json!({ "supported_features": 0 }),
+        );
         assert_eq!(capabilities(&bare), vec![Control::ReadOnly]);
     }
 
     #[test]
     fn a_cover_without_position_gets_no_position_slider() {
-        let e = entity("cover.door", "open", json!({ "supported_features": 1 | 2 | 8 }));
+        let e = entity(
+            "cover.door",
+            "open",
+            json!({ "supported_features": 1 | 2 | 8 }),
+        );
         let controls = capabilities(&e);
         assert!(controls.contains(&Control::OpenClose));
         assert!(controls.contains(&Control::Stop));
@@ -397,17 +441,41 @@ mod tests {
 
     #[test]
     fn sensors_are_read_only() {
-        let e = entity("sensor.temp", "21.5", json!({ "unit_of_measurement": "°C" }));
+        let e = entity(
+            "sensor.temp",
+            "21.5",
+            json!({ "unit_of_measurement": "°C" }),
+        );
         assert_eq!(capabilities(&e), vec![Control::ReadOnly]);
     }
 
     #[test]
     fn active_state_follows_the_domains_own_meaning() {
-        assert!(!row(&entity("lock.front", "locked", json!({})), None, None).unwrap().active);
-        assert!(row(&entity("lock.front", "unlocked", json!({})), None, None).unwrap().active);
-        assert!(row(&entity("cover.door", "open", json!({})), None, None).unwrap().active);
-        assert!(row(&entity("climate.hall", "heat", json!({})), None, None).unwrap().active);
-        assert!(!row(&entity("climate.hall", "off", json!({})), None, None).unwrap().active);
+        assert!(
+            !row(&entity("lock.front", "locked", json!({})), None, None)
+                .unwrap()
+                .active
+        );
+        assert!(
+            row(&entity("lock.front", "unlocked", json!({})), None, None)
+                .unwrap()
+                .active
+        );
+        assert!(
+            row(&entity("cover.door", "open", json!({})), None, None)
+                .unwrap()
+                .active
+        );
+        assert!(
+            row(&entity("climate.hall", "heat", json!({})), None, None)
+                .unwrap()
+                .active
+        );
+        assert!(
+            !row(&entity("climate.hall", "off", json!({})), None, None)
+                .unwrap()
+                .active
+        );
     }
 
     #[test]
@@ -425,7 +493,10 @@ mod tests {
         );
         let row = row(&e, None, None).unwrap();
         for banned in ["access_token", "entity_picture", "latitude", "longitude"] {
-            assert!(!row.attributes.contains_key(banned), "{banned} leaked into the row");
+            assert!(
+                !row.attributes.contains_key(banned),
+                "{banned} leaked into the row"
+            );
         }
         assert_eq!(row.attributes.get("friendly_name").unwrap(), "Front Door");
     }
@@ -444,7 +515,11 @@ mod tests {
 
     #[test]
     fn server_controlled_names_cannot_carry_markup() {
-        let e = entity("light.a", "on", json!({ "friendly_name": "<img src=x>Desk" }));
+        let e = entity(
+            "light.a",
+            "on",
+            json!({ "friendly_name": "<img src=x>Desk" }),
+        );
         assert_eq!(row(&e, None, None).unwrap().name, "img src=xDesk");
 
         let e = entity("sensor.a", "21", json!({ "unit_of_measurement": "<b>C" }));
@@ -454,7 +529,10 @@ mod tests {
     #[test]
     fn names_prefer_the_registry_override_then_the_friendly_name() {
         let e = entity("light.desk", "on", json!({ "friendly_name": "Desk Lamp" }));
-        assert_eq!(row(&e, Some("Reading Light"), None).unwrap().name, "Reading Light");
+        assert_eq!(
+            row(&e, Some("Reading Light"), None).unwrap().name,
+            "Reading Light"
+        );
         assert_eq!(row(&e, None, None).unwrap().name, "Desk Lamp");
 
         let bare = entity("light.nameless", "on", json!({}));
@@ -463,13 +541,25 @@ mod tests {
 
     #[test]
     fn a_device_class_picks_the_icon_the_dashboard_shows() {
-        let power = entity("sensor.plug_power", "18", json!({ "device_class": "power" }));
+        let power = entity(
+            "sensor.plug_power",
+            "18",
+            json!({ "device_class": "power" }),
+        );
         assert_eq!(row(&power, None, None).unwrap().icon, "mdi:flash");
 
-        let energy = entity("sensor.plug_energy", "4.2", json!({ "device_class": "energy" }));
+        let energy = entity(
+            "sensor.plug_energy",
+            "4.2",
+            json!({ "device_class": "energy" }),
+        );
         assert_eq!(row(&energy, None, None).unwrap().icon, "mdi:lightning-bolt");
 
-        let temp = entity("sensor.hall", "21", json!({ "device_class": "temperature" }));
+        let temp = entity(
+            "sensor.hall",
+            "21",
+            json!({ "device_class": "temperature" }),
+        );
         assert_eq!(row(&temp, None, None).unwrap().icon, "mdi:thermometer");
 
         // an outlet reads its state, a plain sensor does not
@@ -479,8 +569,11 @@ mod tests {
         assert_eq!(row(&off, None, None).unwrap().icon, "mdi:power-plug-off");
 
         // an entity's own icon still wins over the class
-        let explicit = entity("sensor.plug_power", "18",
-                              json!({ "device_class": "power", "icon": "mdi:desk" }));
+        let explicit = entity(
+            "sensor.plug_power",
+            "18",
+            json!({ "device_class": "power", "icon": "mdi:desk" }),
+        );
         assert_eq!(row(&explicit, None, None).unwrap().icon, "mdi:desk");
     }
 
@@ -500,7 +593,12 @@ mod tests {
         assert_eq!(on.icon, "mdi:lightbulb");
         assert_eq!(off.icon, "mdi:lightbulb-off");
 
-        let custom = row(&entity("light.a", "on", json!({ "icon": "mdi:desk" })), None, None).unwrap();
+        let custom = row(
+            &entity("light.a", "on", json!({ "icon": "mdi:desk" })),
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(custom.icon, "mdi:desk");
     }
 
@@ -508,19 +606,43 @@ mod tests {
     fn wire_names_the_panel_reads_are_camel_case() {
         let row = row(&entity("light.desk", "on", json!({})), None, None).unwrap();
         let json = serde_json::to_value(&row).unwrap();
-        for key in ["entityId", "domain", "name", "icon", "glyph", "state",
-                    "displayState", "active", "unavailable", "controls", "attributes"] {
+        for key in [
+            "entityId",
+            "domain",
+            "name",
+            "icon",
+            "glyph",
+            "state",
+            "displayState",
+            "active",
+            "unavailable",
+            "controls",
+            "attributes",
+        ] {
             assert!(json.get(key).is_some(), "Row is missing {key}: {json}");
         }
     }
 
     #[test]
     fn every_row_carries_a_glyph_to_draw() {
-        let known = row(&entity("light.a", "on", json!({ "icon": "mdi:desk-lamp" })), None, None).unwrap();
+        let known = row(
+            &entity("light.a", "on", json!({ "icon": "mdi:desk-lamp" })),
+            None,
+            None,
+        )
+        .unwrap();
         assert!(!known.glyph.is_empty());
 
-        let unknown = row(&entity("light.a", "on", json!({ "icon": "mdi:not-a-real-icon" })), None, None).unwrap();
-        assert!(!unknown.glyph.is_empty(), "an unknown icon must fall back, not blank out");
+        let unknown = row(
+            &entity("light.a", "on", json!({ "icon": "mdi:not-a-real-icon" })),
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(
+            !unknown.glyph.is_empty(),
+            "an unknown icon must fall back, not blank out"
+        );
 
         let bare = row(&entity("sensor.x", "1", json!({})), None, None).unwrap();
         assert!(!bare.glyph.is_empty());
@@ -536,7 +658,12 @@ mod tests {
 
     #[test]
     fn display_state_carries_units_and_titlecases_enums() {
-        let sensor = row(&entity("sensor.t", "21.5", json!({ "unit_of_measurement": "°C" })), None, None).unwrap();
+        let sensor = row(
+            &entity("sensor.t", "21.5", json!({ "unit_of_measurement": "°C" })),
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(sensor.display_state, "21.5 °C");
 
         let climate = row(&entity("climate.h", "heat_cool", json!({})), None, None).unwrap();

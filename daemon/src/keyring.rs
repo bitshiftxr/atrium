@@ -11,7 +11,11 @@ const SERVICE: &str = "atrium";
 // Resolved absolutely, and PATH pinned for the child: the token is written to
 // this process's stdin, so a `secret-tool` planted earlier in an inherited PATH
 // would receive it.
-const CANDIDATES: &[&str] = &["/usr/bin/secret-tool", "/bin/secret-tool", "/usr/local/bin/secret-tool"];
+const CANDIDATES: &[&str] = &[
+    "/usr/bin/secret-tool",
+    "/bin/secret-tool",
+    "/usr/local/bin/secret-tool",
+];
 const SAFE_PATH: &str = "/usr/bin:/bin";
 
 fn helper() -> Option<&'static str> {
@@ -51,7 +55,11 @@ async fn run(args: &[&str], stdin: Option<&str>) -> Result<String, Error> {
     command
         .env("PATH", SAFE_PATH)
         .args(args)
-        .stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() })
+        .stdin(if stdin.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -140,8 +148,13 @@ mod tests {
             return;
         }
         let origin = "https://atrium-test.invalid:1";
-        clear(origin).await.expect("clearing an absent entry is fine");
-        assert!(lookup(origin).await.expect("lookup should succeed").is_none());
+        clear(origin)
+            .await
+            .expect("clearing an absent entry is fine");
+        assert!(lookup(origin)
+            .await
+            .expect("lookup should succeed")
+            .is_none());
     }
 
     #[tokio::test]
@@ -164,7 +177,9 @@ mod tests {
         for candidate in CANDIDATES {
             assert!(candidate.starts_with('/'), "{candidate} must be absolute");
         }
-        assert!(!SAFE_PATH.split(':').any(|p| p.is_empty() || !p.starts_with('/')));
+        assert!(!SAFE_PATH
+            .split(':')
+            .any(|p| p.is_empty() || !p.starts_with('/')));
     }
 
     #[tokio::test]

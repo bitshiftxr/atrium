@@ -3,11 +3,11 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use super::{Daemon, Outcome, BACKOFF_MAX, BACKOFF_START, IDLE_LIMIT, IDLE_PING};
-use crate::protocol::Level;
 use crate::ha::client::{CommandWriter, Error as ClientError, EventReader, Session};
-use crate::ha::url::{self, Endpoint};
 use crate::ha::prefs;
+use crate::ha::url::{self, Endpoint};
 use crate::keyring;
+use crate::protocol::Level;
 use crate::protocol::{Command, ConnectionState, Event};
 
 /// Which way main_loop leaves the current iteration.
@@ -185,7 +185,12 @@ impl Daemon {
             }
         }
 
-        for event_type in ["state_changed", "area_registry_updated", "entity_registry_updated", "device_registry_updated"] {
+        for event_type in [
+            "state_changed",
+            "area_registry_updated",
+            "entity_registry_updated",
+            "device_registry_updated",
+        ] {
             if let Err(e) = session.subscribe(event_type).await {
                 return Outcome::Lost(e);
             }
@@ -274,5 +279,4 @@ impl Daemon {
             }
         }
     }
-
 }

@@ -34,7 +34,10 @@ mod tests {
 
     #[test]
     fn markup_cannot_survive_into_a_label() {
-        assert_eq!(plain("<img src=x onerror=alert(1)>"), "img src=x onerror=alert(1)");
+        assert_eq!(
+            plain("<img src=x onerror=alert(1)>"),
+            "img src=x onerror=alert(1)"
+        );
         assert_eq!(plain("<b>Kitchen</b>"), "bKitchen/b");
         assert_eq!(plain("Kitchen"), "Kitchen");
     }
@@ -64,8 +67,18 @@ mod tests {
     fn entity_ids_must_be_a_plain_domain_and_object() {
         assert!(valid_entity_id("light.desk"));
         assert!(valid_entity_id("binary_sensor.front_door_2"));
-        for bad in ["", "light", "light.", ".desk", "Light.Desk", "__proto__",
-                    "light.desk; rm -rf /", "constructor", "toString", "light..desk"] {
+        for bad in [
+            "",
+            "light",
+            "light.",
+            ".desk",
+            "Light.Desk",
+            "__proto__",
+            "light.desk; rm -rf /",
+            "constructor",
+            "toString",
+            "light..desk",
+        ] {
             assert!(!valid_entity_id(bad), "{bad} must be refused");
         }
     }

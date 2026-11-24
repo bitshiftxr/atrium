@@ -39,7 +39,10 @@ fn projection_is_sane_on_a_real_instance() {
         return;
     };
     let tabs = registry.project_tabs(&live, &AreaPrefs::default(), |id| id.to_string());
-    assert!(!tabs.is_empty(), "a real instance must produce tabs with no favorites set");
+    assert!(
+        !tabs.is_empty(),
+        "a real instance must produce tabs with no favorites set"
+    );
 
     let mut seen = HashSet::new();
     for tab in &tabs {
@@ -49,7 +52,11 @@ fn projection_is_sane_on_a_real_instance() {
     }
 
     for tab in tabs.iter().filter(|t| t.id.starts_with("area:")) {
-        assert!(!tab.entity_ids.is_empty(), "empty area tab {} leaked", tab.id);
+        assert!(
+            !tab.entity_ids.is_empty(),
+            "empty area tab {} leaked",
+            tab.id
+        );
     }
 
     let mut placed = HashSet::new();
@@ -80,7 +87,10 @@ fn imported_dashboard_preferences_reproduce_the_overview() {
 
     for tab in &tabs {
         if let Some(area) = tab.id.strip_prefix("area:") {
-            assert!(!hidden.contains(area), "{area} is hidden in Home Assistant but shown here");
+            assert!(
+                !hidden.contains(area),
+                "{area} is hidden in Home Assistant but shown here"
+            );
         }
     }
     if imported.hide_entities_without_area {

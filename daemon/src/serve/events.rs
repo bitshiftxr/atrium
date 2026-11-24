@@ -17,15 +17,17 @@ impl Daemon {
             }
             return;
         }
-        let Some(event) = message.get("event") else { return };
+        let Some(event) = message.get("event") else {
+            return;
+        };
         match event.get("event_type").and_then(Value::as_str) {
             Some("state_changed") => self.handle_state_changed(event),
             // Re-projecting would use the registry fetched at connect time, so a
             // renamed or added area would never appear. Reconnecting refetches
             // it; the guard keeps an integration reload from looping.
-            Some("area_registry_updated" | "entity_registry_updated" | "device_registry_updated")
-                if self.connected_at.elapsed() >= REGISTRY_REFRESH_FLOOR =>
-            {
+            Some(
+                "area_registry_updated" | "entity_registry_updated" | "device_registry_updated",
+            ) if self.connected_at.elapsed() >= REGISTRY_REFRESH_FLOOR => {
                 self.info("Home Assistant areas or devices changed; reloading.");
                 self.registry_stale = true;
             }
@@ -34,7 +36,9 @@ impl Daemon {
     }
 
     fn handle_state_changed(&mut self, event: &Value) {
-        let Some(data) = event.get("data") else { return };
+        let Some(data) = event.get("data") else {
+            return;
+        };
         let Some(entity_id) = data.get("entity_id").and_then(Value::as_str) else {
             return;
         };
@@ -47,10 +51,14 @@ impl Daemon {
             return;
         }
 
-        let Some(new_state) = data.get("new_state") else { return };
+        let Some(new_state) = data.get("new_state") else {
+            return;
+        };
         if new_state.is_null() {
             self.states.remove(entity_id);
-            self.emit(Event::Dropped { entity_id: entity_id.to_string() });
+            self.emit(Event::Dropped {
+                entity_id: entity_id.to_string(),
+            });
             self.emit_projection();
             return;
         }

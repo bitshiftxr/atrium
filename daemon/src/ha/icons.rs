@@ -6906,12 +6906,19 @@ mod tests {
 
     #[test]
     fn the_table_is_sorted_so_binary_search_is_valid() {
-        assert!(ICONS.windows(2).all(|w| w[0].0 < w[1].0), "ICONS must be sorted and unique");
+        assert!(
+            ICONS.windows(2).all(|w| w[0].0 < w[1].0),
+            "ICONS must be sorted and unique"
+        );
     }
 
     #[test]
     fn the_generated_table_is_not_empty() {
-        assert!(count() > 6000, "expected the full Material Design set, got {}", count());
+        assert!(
+            count() > 6000,
+            "expected the full Material Design set, got {}",
+            count()
+        );
     }
 
     #[test]
@@ -6923,11 +6930,26 @@ mod tests {
     #[test]
     fn every_icon_this_project_falls_back_to_exists() {
         for name in [
-            "texture-box", "help-circle-outline", "lightbulb", "lightbulb-outline",
-            "toggle-switch-outline", "fan", "lock", "window-shutter", "thermostat",
-            "speaker", "palette", "script-text", "gesture-tap-button",
-            "checkbox-marked-circle", "checkbox-blank-circle-outline", "eye",
-            "air-humidifier", "remote", "home", "stairs",
+            "texture-box",
+            "help-circle-outline",
+            "lightbulb",
+            "lightbulb-outline",
+            "toggle-switch-outline",
+            "fan",
+            "lock",
+            "window-shutter",
+            "thermostat",
+            "speaker",
+            "palette",
+            "script-text",
+            "gesture-tap-button",
+            "checkbox-marked-circle",
+            "checkbox-blank-circle-outline",
+            "eye",
+            "air-humidifier",
+            "remote",
+            "home",
+            "stairs",
         ] {
             assert!(glyph(name).is_some(), "fallback icon {name} is missing");
         }

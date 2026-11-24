@@ -8,7 +8,9 @@ pub const VERSION: u32 = 1;
 pub enum Command {
     Connect,
     Disconnect,
-    SetUrl { url: String },
+    SetUrl {
+        url: String,
+    },
     SetToken {
         token: String,
         #[serde(default)]
@@ -22,7 +24,10 @@ pub enum Command {
         data: Value,
     },
     /// Every plain on/off device a tab shows, switched together.
-    AreaPower { tab: String, on: bool },
+    AreaPower {
+        tab: String,
+        on: bool,
+    },
     SetAreaPrefs {
         // Absent means "leave it alone". An omitted list must never be read as
         // an instruction to clear a hand-built room order.
@@ -42,8 +47,12 @@ pub enum Command {
         #[serde(default)]
         show: Option<bool>,
     },
-    SetSelectedTab { tab: String },
-    SetPinnedTabs { ids: Vec<String> },
+    SetSelectedTab {
+        tab: String,
+    },
+    SetPinnedTabs {
+        ids: Vec<String>,
+    },
     Refresh,
     Status,
 }
@@ -83,11 +92,21 @@ pub enum Event {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         plaintext: bool,
     },
-    Tabs { tabs: Vec<crate::ha::registry::Tab> },
-    Areas { areas: Vec<crate::ha::registry::AreaChoice> },
-    Rows { rows: Vec<crate::ha::model::Row> },
-    Row { row: crate::ha::model::Row },
-    Dropped { entity_id: String },
+    Tabs {
+        tabs: Vec<crate::ha::registry::Tab>,
+    },
+    Areas {
+        areas: Vec<crate::ha::registry::AreaChoice>,
+    },
+    Rows {
+        rows: Vec<crate::ha::model::Row>,
+    },
+    Row {
+        row: crate::ha::model::Row,
+    },
+    Dropped {
+        entity_id: String,
+    },
     #[serde(rename_all = "camelCase")]
     Config {
         favorites: Vec<String>,
@@ -122,12 +141,18 @@ pub struct Envelope {
 
 impl Envelope {
     pub fn new(generation: u64, event: Event) -> Self {
-        Self { v: VERSION, gen: generation, event }
+        Self {
+            v: VERSION,
+            gen: generation,
+            event,
+        }
     }
 
     pub fn to_line(&self) -> String {
         serde_json::to_string(self).unwrap_or_else(|e| {
-            format!(r#"{{"v":{VERSION},"gen":0,"ev":"error","message":"could not encode event: {e}"}}"#)
+            format!(
+                r#"{{"v":{VERSION},"gen":0,"ev":"error","message":"could not encode event: {e}"}}"#
+            )
         })
     }
 }
@@ -145,7 +170,9 @@ mod tests {
         assert!(matches!(parse(r#"{"cmd":"connect"}"#), Command::Connect));
         assert!(matches!(parse(r#"{"cmd":"refresh"}"#), Command::Refresh));
 
-        let Command::Action { entity_id, action, .. } = parse(r#"{"cmd":"action","entityId":"light.desk","action":"toggle"}"#)
+        let Command::Action {
+            entity_id, action, ..
+        } = parse(r#"{"cmd":"action","entityId":"light.desk","action":"toggle"}"#)
         else {
             panic!("expected an action");
         };
@@ -155,13 +182,16 @@ mod tests {
 
     #[test]
     fn an_area_power_command_names_the_tab_and_the_direction() {
-        let Command::AreaPower { tab, on } = parse(r#"{"cmd":"areaPower","tab":"area:kitchen","on":false}"#)
+        let Command::AreaPower { tab, on } =
+            parse(r#"{"cmd":"areaPower","tab":"area:kitchen","on":false}"#)
         else {
             panic!("expected area power");
         };
         assert_eq!(tab, "area:kitchen");
         assert!(!on);
-        assert!(serde_json::from_str::<Command>(r#"{"cmd":"areaPower","tab":"area:kitchen"}"#).is_err());
+        assert!(
+            serde_json::from_str::<Command>(r#"{"cmd":"areaPower","tab":"area:kitchen"}"#).is_err()
+        );
     }
 
     #[test]
@@ -182,8 +212,12 @@ mod tests {
 
     #[test]
     fn area_preferences_accept_partial_updates() {
-        let Command::SetAreaPrefs { order, hidden, hide_empty_areas, hide_entities_without_area } =
-            parse(r#"{"cmd":"setAreaPrefs","hidden":["patio"]}"#)
+        let Command::SetAreaPrefs {
+            order,
+            hidden,
+            hide_empty_areas,
+            hide_entities_without_area,
+        } = parse(r#"{"cmd":"setAreaPrefs","hidden":["patio"]}"#)
         else {
             panic!("expected area prefs");
         };
@@ -201,12 +235,15 @@ mod tests {
 
     #[test]
     fn every_event_carries_the_version_and_generation() {
-        let line = Envelope::new(7, Event::Log {
-            level: Level::Error,
-            at: 1,
-            text: "nope".into(),
-            entity_id: None,
-        })
+        let line = Envelope::new(
+            7,
+            Event::Log {
+                level: Level::Error,
+                at: 1,
+                text: "nope".into(),
+                entity_id: None,
+            },
+        )
         .to_line();
         let value: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(value["v"], VERSION);
@@ -217,12 +254,15 @@ mod tests {
 
     #[test]
     fn a_log_entry_carries_a_level_and_a_timestamp() {
-        let line = Envelope::new(1, Event::Log {
-            level: Level::Warn,
-            at: 1_788_000_000_000,
-            text: "Home Assistant refused light.turn_on".into(),
-            entity_id: Some("light.desk".into()),
-        })
+        let line = Envelope::new(
+            1,
+            Event::Log {
+                level: Level::Warn,
+                at: 1_788_000_000_000,
+                text: "Home Assistant refused light.turn_on".into(),
+                entity_id: Some("light.desk".into()),
+            },
+        )
         .to_line();
         let value: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(value["ev"], "log");
@@ -233,41 +273,54 @@ mod tests {
 
     #[test]
     fn a_log_entry_omits_an_entity_it_does_not_concern() {
-        let line = Envelope::new(1, Event::Log {
-            level: Level::Info,
-            at: 1,
-            text: "Connected".into(),
-            entity_id: None,
-        })
+        let line = Envelope::new(
+            1,
+            Event::Log {
+                level: Level::Info,
+                at: 1,
+                text: "Connected".into(),
+                entity_id: None,
+            },
+        )
         .to_line();
         assert!(!line.contains("entityId"));
     }
 
     #[test]
     fn events_are_a_single_line() {
-        let line = Envelope::new(1, Event::Log {
-            level: Level::Info,
-            at: 1,
-            text: "a\nb".into(),
-            entity_id: None,
-        })
+        let line = Envelope::new(
+            1,
+            Event::Log {
+                level: Level::Info,
+                at: 1,
+                text: "a\nb".into(),
+                entity_id: None,
+            },
+        )
         .to_line();
-        assert_eq!(line.lines().count(), 1, "a newline in a message must not split the frame");
+        assert_eq!(
+            line.lines().count(),
+            1,
+            "a newline in a message must not split the frame"
+        );
     }
 
     #[test]
     fn config_carries_the_area_flags_the_settings_ui_reflects() {
-        let line = Envelope::new(1, Event::Config {
-            favorites: vec!["light.desk".into()],
-            pinned_tabs: vec!["area:office".into()],
-            allow_sensitive_ipc: false,
-            show_favorites: false,
-            selected_tab: "area:office".into(),
-            imported_dashboard_prefs: true,
-            base_url: "https://ha.example.com".into(),
-            hide_empty_areas: true,
-            hide_entities_without_area: false,
-        })
+        let line = Envelope::new(
+            1,
+            Event::Config {
+                favorites: vec!["light.desk".into()],
+                pinned_tabs: vec!["area:office".into()],
+                allow_sensitive_ipc: false,
+                show_favorites: false,
+                selected_tab: "area:office".into(),
+                imported_dashboard_prefs: true,
+                base_url: "https://ha.example.com".into(),
+                hide_empty_areas: true,
+                hide_entities_without_area: false,
+            },
+        )
         .to_line();
         let value: serde_json::Value = serde_json::from_str(&line).unwrap();
         assert_eq!(value["hideEmptyAreas"], true);
@@ -278,13 +331,16 @@ mod tests {
 
     #[test]
     fn status_omits_absent_fields_and_hides_the_plaintext_flag_when_false() {
-        let line = Envelope::new(1, Event::Status {
-            state: ConnectionState::Connected,
-            message: None,
-            origin: Some("https://ha.example.com".into()),
-            ha_version: Some("2026.8.3".into()),
-            plaintext: false,
-        })
+        let line = Envelope::new(
+            1,
+            Event::Status {
+                state: ConnectionState::Connected,
+                message: None,
+                origin: Some("https://ha.example.com".into()),
+                ha_version: Some("2026.8.3".into()),
+                plaintext: false,
+            },
+        )
         .to_line();
         assert!(!line.contains("message"));
         assert!(!line.contains("plaintext"));
