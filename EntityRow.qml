@@ -94,12 +94,40 @@ Item {
         visible: !root.switchable
       }
 
-      RowSwitch {
+      Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         visible: root.switchable
-        on: root.row ? root.row.active === true : false
-        pending: root.pending
-        onClicked: root.activated()
+        width: Style.space(26)
+        height: Style.space(14)
+        radius: Style.cornerRadius
+        color: "transparent"
+        border.width: 1
+        border.color: root.row && root.row.active ? Color.accent : Style.normalBorderColor
+
+        Rectangle {
+          width: Style.space(10)
+          height: Style.space(10)
+          radius: Style.cornerRadius
+          anchors.verticalCenter: parent.verticalCenter
+          anchors.left: root.row && root.row.active ? undefined : parent.left
+          anchors.right: root.row && root.row.active ? parent.right : undefined
+          anchors.leftMargin: 1
+          anchors.rightMargin: 1
+          color: root.row && root.row.active ? Color.accent : Color.muted
+
+          SequentialAnimation on opacity {
+            running: root.pending
+            loops: Animation.Infinite
+            NumberAnimation { to: 0.3; duration: 400 }
+            NumberAnimation { to: 1.0; duration: 400 }
+          }
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.activated()
+        }
       }
     }
 

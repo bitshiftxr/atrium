@@ -142,7 +142,7 @@ cargo clippy --all-targets
 ```sh
 omarchy plugin validate .
 qmllint -I "$OMARCHY_PATH/shell" -I . Bridge.qml DaemonFailureTest.qml \
-  EntityRow.qml Glyph.qml RowSwitch.qml Service.qml Settings.qml controls/*.qml settings/*.qml
+  EntityRow.qml Glyph.qml Service.qml Settings.qml controls/*.qml settings/*.qml
 ```
 
 `Panel.qml` is left out of that list because qmllint 1.0 exits 255 on it with no

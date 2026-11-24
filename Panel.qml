@@ -233,16 +233,14 @@ Panel {
 
           // Every light, switch, fan and toggle in the room at once. Never
           // locks, covers, climate or media; the daemon enforces that.
-          // The device rows' own switch, so on, off and in-flight look the
-          // same here as on every row below.
-          RowSwitch {
+          ToggleSwitch {
             id: roomSwitch
             anchors.right: parent.right
             anchors.rightMargin: root.pad
             anchors.verticalCenter: roomPicker.verticalCenter
             visible: root.roomSwitchable
-            on: root.roomAnyOn
-            onClicked: root.toggleRoom()
+            checked: root.roomAnyOn
+            onToggled: root.toggleRoom()
           }
 
           // Dropdown assigns to its own `value` when an item is picked, which
